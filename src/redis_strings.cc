@@ -927,6 +927,8 @@ Status RedisStrings::BitPos(const Slice& key, int32_t bit,
 Status RedisStrings::PKScanRange(const Slice& key_start, const Slice& key_end,
                                  const Slice& pattern, int32_t limit,
                                  std::vector<KeyValue>* kvs, std::string* next_key) {
+  next_key->clear();
+
   std::string key, value;
   int32_t remain = limit;
   shannon::ReadOptions iterator_options;
@@ -954,7 +956,7 @@ Status RedisStrings::PKScanRange(const Slice& key_start, const Slice& key_end,
   }
 
   while (it->Valid() && remain > 0
-       && (end_no_limit || it->key().compare(key_end) <= 0)) {
+    && (end_no_limit || it->key().compare(key_end) <= 0)) {
     ParsedStringsValue parsed_strings_value(it->value());
     if (parsed_strings_value.IsStale()) {
       it->Next();
@@ -970,11 +972,15 @@ Status RedisStrings::PKScanRange(const Slice& key_start, const Slice& key_end,
     }
   }
 
-  if (it->Valid()
+  while (it->Valid()
     && (end_no_limit || it->key().compare(key_end) <= 0)) {
-    *next_key = it->key().ToString();
-  } else {
-    *next_key = "";
+    ParsedStringsValue parsed_strings_value(it->value());
+    if (parsed_strings_value.IsStale()) {
+      it->Next();
+    } else {
+      *next_key = it->key().ToString();
+      break;
+    }
   }
   delete it;
   return Status::OK();
@@ -1010,7 +1016,7 @@ Status RedisStrings::PKRScanRange(const Slice& key_start, const Slice& key_end,
   }
 
   while (it->Valid() && remain > 0
-       && (end_no_limit || it->key().compare(key_end) >= 0)) {
+    && (end_no_limit || it->key().compare(key_end) >= 0)) {
     ParsedStringsValue parsed_strings_value(it->value());
     if (parsed_strings_value.IsStale()) {
       it->Prev();
@@ -1026,11 +1032,15 @@ Status RedisStrings::PKRScanRange(const Slice& key_start, const Slice& key_end,
     }
   }
 
-  if (it->Valid()
+  while (it->Valid()
     && (end_no_limit || it->key().compare(key_end) >= 0)) {
-    *next_key = it->key().ToString();
-  } else {
-    *next_key = "";
+    ParsedStringsValue parsed_strings_value(it->value());
+    if (parsed_strings_value.IsStale()) {
+      it->Prev();
+    } else {
+      *next_key = it->key().ToString();
+      break;
+    }
   }
   delete it;
   return Status::OK();
