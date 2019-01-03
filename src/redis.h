@@ -28,7 +28,7 @@ class Redis {
   Redis();
   virtual ~Redis();
 
-  shannon::DB* get_db() {
+  shannon::DB* GetDB() {
     return db_;
   }
 

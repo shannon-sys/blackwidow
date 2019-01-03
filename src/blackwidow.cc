@@ -49,11 +49,11 @@ BlackWidow::~BlackWidow() {
   bg_tasks_should_exit_ = true;
   bg_tasks_cond_var_.Signal();
 
-  shannon::CancelAllBackgroundWork(strings_db_->get_db(), true);
-  shannon::CancelAllBackgroundWork(hashes_db_->get_db(), true);
-  shannon::CancelAllBackgroundWork(sets_db_->get_db(), true);
-  shannon::CancelAllBackgroundWork(lists_db_->get_db(), true);
-  shannon::CancelAllBackgroundWork(zsets_db_->get_db(), true);
+  shannon::CancelAllBackgroundWork(strings_db_->GetDB(), true);
+  shannon::CancelAllBackgroundWork(hashes_db_->GetDB(), true);
+  shannon::CancelAllBackgroundWork(sets_db_->GetDB(), true);
+  shannon::CancelAllBackgroundWork(lists_db_->GetDB(), true);
+  shannon::CancelAllBackgroundWork(zsets_db_->GetDB(), true);
 
   int ret = 0;
   if ((ret = pthread_join(bg_tasks_thread_id_, NULL)) != 0) {
@@ -134,7 +134,7 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
         fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
         exit(-1);
       }
-    shannon::DB *db =   strings_db_->get_db();
+    shannon::DB *db = strings_db_->GetDB();
     db_path_len_ = db->GetName().length() -strlen("strings");
     CheckCleaning();
     return Status::OK();
@@ -230,8 +230,8 @@ Status BlackWidow::MSet(const std::vector<KeyValue>& kvs) {
 }
 
 Status BlackWidow::MGet(const std::vector<std::string>& keys,
-                        std::vector<std::string>* values) {
-  return strings_db_->MGet(keys, values);
+                        std::vector<ValueStatus>* vss) {
+  return strings_db_->MGet(keys, vss);
 }
 
 Status BlackWidow::Setnx(const Slice& key, const Slice& value,
@@ -333,8 +333,8 @@ Status BlackWidow::HMSet(const Slice& key,
 
 Status BlackWidow::HMGet(const Slice& key,
                          const std::vector<std::string>& fields,
-                         std::vector<std::string>* values) {
-  return hashes_db_->HMGet(key, fields, values);
+                         std::vector<ValueStatus>* vss) {
+  return hashes_db_->HMGet(key, fields, vss);
 }
 
 Status BlackWidow::HGetall(const Slice& key,
@@ -1847,15 +1847,15 @@ Status BlackWidow::StopScanKeyNum() {
 
 shannon::DB* BlackWidow::GetDBByType(const std::string& type) {
   if (type == STRINGS_DB) {
-    return strings_db_->get_db();
+    return strings_db_->GetDB();
   } else if (type == HASHES_DB) {
-    return hashes_db_->get_db();
+    return hashes_db_->GetDB();
   } else if (type == LISTS_DB) {
-    return lists_db_->get_db();
+    return lists_db_->GetDB();
   } else if (type == SETS_DB) {
-    return sets_db_->get_db();
+    return sets_db_->GetDB();
   } else if (type == ZSETS_DB) {
-    return zsets_db_->get_db();
+    return zsets_db_->GetDB();
   } else {
     return NULL;
   }
