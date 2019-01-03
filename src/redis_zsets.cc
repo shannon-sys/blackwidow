@@ -1504,8 +1504,11 @@ Status RedisZSets::Expire(const Slice& key, int32_t ttl) {
     memcpy(const_cast<char*>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
     ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
+      return Status::NotFound("Stale");
+    } else if (parsed_zsets_meta_value.count() == 0) {
       return Status::NotFound();
     }
+
     if (ttl > 0) {
       parsed_zsets_meta_value.SetRelativeTimestamp(ttl);
       if (parsed_zsets_meta_value.timestamp() != 0 ) {
@@ -1626,6 +1629,8 @@ Status RedisZSets::Expireat(const Slice& key, int32_t timestamp) {
     if (parsed_zsets_meta_value.IsStale()) {
       delete meta_value;
       return Status::NotFound("Stale");
+    } else if (parsed_zsets_meta_value.count() == 0) {
+      return Status::NotFound();
     } else {
       parsed_zsets_meta_value.set_timestamp(timestamp);
       if (parsed_zsets_meta_value.timestamp() != 0 ) {

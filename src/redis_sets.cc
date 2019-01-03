@@ -1414,6 +1414,9 @@ Status RedisSets::Expire(const Slice& key, int32_t ttl) {
     if (parsed_sets_meta_value.IsStale()) {
       delete meta_value;
       return Status::NotFound("Stale");
+    } else if (parsed_sets_meta_value.count() == 0) {
+      delete meta_value;
+      return Status::NotFound();
     }
     if (ttl > 0) {
       parsed_sets_meta_value.SetRelativeTimestamp(ttl);
@@ -1534,6 +1537,9 @@ Status RedisSets::Expireat(const Slice& key, int32_t timestamp) {
     if (parsed_sets_meta_value.IsStale()) {
       delete meta_value;
       return Status::NotFound("Stale");
+    } else if (parsed_sets_meta_value.count() == 0) {
+      delete meta_value;
+      return Status::NotFound();
     } else {
       parsed_sets_meta_value.set_timestamp(timestamp);
       if (parsed_sets_meta_value.timestamp() != 0 ) {

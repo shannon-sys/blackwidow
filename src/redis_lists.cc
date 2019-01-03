@@ -1525,7 +1525,10 @@ Status RedisLists::Expire(const Slice& key, int32_t ttl) {
     ParsedListsMetaValue parsed_lists_meta_value(meta_info->second);
     if (parsed_lists_meta_value.IsStale()) {
       return Status::NotFound("Stale");
+    } else if (parsed_lists_meta_value.count() == 0) {
+      return Status::NotFound();
     }
+
     uint32_t old_count = parsed_lists_meta_value.count();
     int32_t old_version = parsed_lists_meta_value.version();
     int32_t old_timestamp = parsed_lists_meta_value.timestamp();
@@ -1648,6 +1651,8 @@ Status RedisLists::Expireat(const Slice& key, int32_t timestamp) {
     ParsedListsMetaValue parsed_lists_meta_value(meta_info->second);
     if (parsed_lists_meta_value.IsStale()) {
       return Status::NotFound("Stale");
+    } else if (parsed_lists_meta_value.count() == 0) {
+      return Status::NotFound();
     } else {
       int32_t old_timestamp = parsed_lists_meta_value.timestamp();
       parsed_lists_meta_value.set_timestamp(timestamp);
