@@ -1618,6 +1618,9 @@ Status RedisSets::TTL(const Slice& key, int64_t* timestamp) {
     if (parsed_setes_meta_value.IsStale()) {
       *timestamp = -2;
       return Status::NotFound("Stale");
+    } else if (parsed_setes_meta_value.count() == 0) {
+      *timestamp = -2;
+      return Status::NotFound();
     } else {
       *timestamp = parsed_setes_meta_value.timestamp();
       if (*timestamp == 0) {
@@ -1625,7 +1628,7 @@ Status RedisSets::TTL(const Slice& key, int64_t* timestamp) {
       } else {
         int64_t curtime;
         shannon::Env::Default()->GetCurrentTime(&curtime);
-        *timestamp = *timestamp - curtime > 0 ? *timestamp - curtime : -1;
+        *timestamp = *timestamp - curtime > 0 ? *timestamp - curtime : -2;
       }
     }
   } else {
