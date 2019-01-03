@@ -109,14 +109,15 @@ Status RedisHashes::Open(const BlackwidowOptions& bw_options,
 }
 
 Status RedisHashes::CompactRange(const shannon::Slice* begin,
-                                 const shannon::Slice* end) {
-  Status s = db_->CompactRange(default_compact_range_options_,
-      handles_[0], begin, end);
-  if (!s.ok()) {
-    return s;
+                                 const shannon::Slice* end,
+                                 const ColumnFamilyType& type) {
+  if (type == kMeta || type == kMetaAndData) {
+    db_->CompactRange(default_compact_range_options_, handles_[0], begin, end);
   }
-  return db_->CompactRange(default_compact_range_options_,
-      handles_[1], begin, end);
+  if (type == kData || type == kMetaAndData) {
+    db_->CompactRange(default_compact_range_options_, handles_[1], begin, end);
+  return Status::OK();
+  }
 }
 
 Status RedisHashes::GetProperty(const std::string& property, uint64_t* out) {

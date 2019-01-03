@@ -128,19 +128,16 @@ Status RedisZSets::Open(const BlackwidowOptions& bw_options,
 }
 
 Status RedisZSets::CompactRange(const shannon::Slice* begin,
-    const shannon::Slice* end) {
-  Status s = db_->CompactRange(default_compact_range_options_,
-          handles_[0], begin, end);
-  if (!s.ok()) {
-    return s;
+                                const shannon::Slice* end,
+                                const ColumnFamilyType& type) {
+  if (type == kMeta || type == kMetaAndData) {
+    db_->CompactRange(default_compact_range_options_, handles_[0], begin, end);
   }
-  s = db_->CompactRange(default_compact_range_options_,
-          handles_[1], begin, end);
-  if (!s.ok()) {
-    return s;
+  if (type == kData || type == kMetaAndData) {
+    db_->CompactRange(default_compact_range_options_, handles_[1], begin, end);
+    db_->CompactRange(default_compact_range_options_, handles_[2], begin, end);
   }
-  return db_->CompactRange(default_compact_range_options_,
-          handles_[2], begin, end);
+  return Status::OK();
 }
 
 Status RedisZSets::AddDelKey (BlackWidow * bw,const string & str){

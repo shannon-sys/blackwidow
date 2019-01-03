@@ -131,6 +131,12 @@ enum DataType {
   kSets
 };
 
+enum ColumnFamilyType {
+  kMeta,
+  kData,
+  kMetaAndData
+};
+
 enum AGGREGATE {
   SUM,
   MIN,

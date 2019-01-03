@@ -26,7 +26,8 @@ class RedisLists : public Redis {
     virtual Status Open(const BlackwidowOptions& bw_options,
                         const std::string& db_path) override;
     virtual Status CompactRange(const shannon::Slice* begin,
-                                const shannon::Slice* end) override;
+                      		const shannon::Slice* end,
+                      		const ColumnFamilyType& type = kMetaAndData) override;
     virtual Status GetProperty(const std::string& property, uint64_t* out) override;
     virtual Status ScanKeyNum(uint64_t* num) override;
     virtual Status ScanKeys(const std::string& pattern,

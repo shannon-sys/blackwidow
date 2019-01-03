@@ -65,7 +65,8 @@ Status RedisStrings::Open(const BlackwidowOptions& bw_options,
 }
 
 Status RedisStrings::CompactRange(const shannon::Slice* begin,
-    const shannon::Slice* end) {
+                                  const shannon::Slice* end,
+                                  const ColumnFamilyType& type) { 
   return db_->CompactRange(default_compact_range_options_, begin, end);
 }
 

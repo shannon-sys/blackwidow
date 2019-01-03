@@ -202,14 +202,15 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
 }
 
 Status RedisLists::CompactRange(const shannon::Slice* begin,
-                                 const shannon::Slice* end) {
-  Status s = db_->CompactRange(default_compact_range_options_,
-      handles_[0], begin, end);
-  if (!s.ok()) {
-    return s;
+                                const shannon::Slice* end,
+                                const ColumnFamilyType& type) {
+  if (type == kMeta || type == kMetaAndData) {
+    db_->CompactRange(default_compact_range_options_, handles_[0], begin, end);
   }
-  return db_->CompactRange(default_compact_range_options_,
-      handles_[1], begin, end);
+  if (type == kData || type == kMetaAndData) {
+    db_->CompactRange(default_compact_range_options_, handles_[1], begin, end);
+  }
+  return Status::OK();
 }
 
 Status RedisLists::GetProperty(const std::string& property, uint64_t* out) {
@@ -1285,7 +1286,7 @@ Status RedisLists::RPush(const Slice& key,
         EncodeFixed32(buf, 0);
         batch.Put(handles_[3], key, Slice(buf, sizeof(int32_t)));
     } else {
-        char buf[4]; 
+        char buf[4];
         ListsMetaKeyLog lists_meta_key_log(key, parsed_lists_meta_value.version(), log_index);
         ListsMetaValueLog lists_meta_value_log(ParsedListsMetaValue::LIST_META_VALUE_RPUSH, values.size());
         parsed_lists_meta_value.ModifyLogIndex(1);
