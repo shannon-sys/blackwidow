@@ -1733,7 +1733,8 @@ Status RedisZSets::PKScanRange(const Slice& key_start, const Slice& key_end,
     }
   }
 
-  if (it->Valid()) {
+  if (it->Valid()
+    && (end_no_limit || it->key().compare(key_end) <= 0)) {
     *next_key = it->key().ToString();
   } else {
     *next_key = "";
@@ -1786,7 +1787,8 @@ Status RedisZSets::PKRScanRange(const Slice& key_start, const Slice& key_end,
     }
   }
 
-  if (it->Valid()) {
+  if (it->Valid()
+    && (end_no_limit || it->key().compare(key_end) >= 0)) {
     *next_key = it->key().ToString();
   } else {
     *next_key = "";
