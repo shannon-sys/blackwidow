@@ -438,6 +438,7 @@ Status RedisLists::LLen(const Slice& key, uint64_t* len) {
 }
 
 Status RedisLists::LPop(const Slice& key, std::string* element) {
+  uint32_t statistic = 0;
   shannon::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
   std::string *meta_value;
@@ -462,6 +463,7 @@ Status RedisLists::LPop(const Slice& key, std::string* element) {
       s = db_->Get(default_read_options_, handles_[1], lists_data_key.Encode(), element);
       if (s.ok()) {
         batch.Delete(handles_[1], lists_data_key.Encode());
+        statistic++;
         parsed_lists_meta_value.ModifyCacheMoveLeft(1);
         parsed_lists_meta_value.ModifyCount(-1);
         int32_t log_index = parsed_lists_meta_value.log_index();
@@ -481,6 +483,7 @@ Status RedisLists::LPop(const Slice& key, std::string* element) {
             batch.Put(handles_[3], key, Slice(buf, sizeof(int32_t)));
         }
         s = db_->Write(default_write_options_, &batch);
+        UpdateSpecificKeyStatistics(key.ToString(), statistic);
         if (s.ok()) {
             delete meta_info->second;
             meta_info->second = meta_value;
@@ -821,6 +824,7 @@ Status RedisLists::LRem(const Slice& key, int64_t count,
 }
 
 Status RedisLists::LSet(const Slice& key, int64_t index, const Slice& value) {
+  uint32_t statistic = 0;
   ScopeRecordLock l(lock_mgr_, key);
   std::string meta_value;
   std::unordered_map<std::string, std::string*>::iterator meta_info =
@@ -848,8 +852,11 @@ Status RedisLists::LSet(const Slice& key, int64_t index, const Slice& value) {
         memcpy(str + sizeof(int32_t) , key.data(),key.size());
         db_->Put(default_write_options_,handles_[4], {str,sizeof(int32_t)+key.size()}, "1" );
       }
-      return db_->Put(default_write_options_, handles_[1],
-                      lists_data_key.Encode(), value);
+      s = db_->Put(default_write_options_, handles_[1],
+                   lists_data_key.Encode(), value);
+      statistic++;
+      UpdateSpecificKeyStatistics(key.ToString(), statistic);
+      return s;
     }
   } else {
       s = Status::NotFound();
@@ -862,6 +869,7 @@ Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
   shannon::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
+  uint32_t statistic = 0;
   std::string *meta_value = NULL;
   std::unordered_map<std::string, std::string*>::iterator meta_info =
       meta_infos_list_.find(key.data());
@@ -894,6 +902,7 @@ Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
         || sublist_right_index < origin_left_index) {
         // delete all
         for (uint64_t idx = origin_left_index; idx <= origin_right_index; idx++) {
+          statistic++;
           ListsDataKey lists_data_key(key, version, parsed_lists_meta_value.get_fact_index(idx));
           batch.Delete(handles_[1], lists_data_key.Encode());
         }
@@ -916,6 +925,7 @@ Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
 
         char buf[4];
         for (uint64_t idx = origin_right_index; idx > sublist_right_index; --idx) {
+          statistic++;
           ListsDataKey lists_data_key(key, version, parsed_lists_meta_value.get_fact_index(idx));
           batch.Delete(handles_[1], lists_data_key.Encode());
         }
@@ -936,6 +946,7 @@ Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
             }
         }
         for (uint64_t idx = origin_left_index; idx < sublist_left_index; ++idx) {
+          statistic++;
           ListsDataKey lists_data_key(key, version, parsed_lists_meta_value.get_fact_index(idx));
           batch.Delete(handles_[1], lists_data_key.Encode());
         }
@@ -965,6 +976,8 @@ Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
     return Status::NotFound();
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
+
   if (s.ok()) {
       delete meta_info->second;
       meta_info->second = meta_value;
@@ -975,6 +988,7 @@ Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
 }
 
 Status RedisLists::RPop(const Slice& key, std::string* element) {
+  uint32_t statistic = 0;
   shannon::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
@@ -1001,6 +1015,7 @@ Status RedisLists::RPop(const Slice& key, std::string* element) {
       s = db_->Get(default_read_options_, handles_[1], lists_data_key.Encode(), element);
       if (s.ok()) {
         batch.Delete(handles_[1], lists_data_key.Encode());
+        statistic++;
         parsed_lists_meta_value.ModifyCount(-1);
         int32_t log_index = parsed_lists_meta_value.log_index();
         if (log_index < lists_log_count_) {
@@ -1020,6 +1035,7 @@ Status RedisLists::RPop(const Slice& key, std::string* element) {
             batch.Put(handles_[3], key, Slice(buf, sizeof(int32_t)));
         }
         s = db_->Write(default_write_options_, &batch);
+        UpdateSpecificKeyStatistics(key.ToString(), statistic);
         if (s.ok()) {
             delete meta_info->second;
             meta_info->second = meta_value;
@@ -1041,6 +1057,7 @@ Status RedisLists::RPoplpush(const Slice& source,
                              const Slice& destination,
                              std::string* element) {
   element->clear();
+  uint32_t statistic = 0;
   Status s;
   shannon::WriteBatch batch;
   std::string *meta_value;
@@ -1066,7 +1083,7 @@ Status RedisLists::RPoplpush(const Slice& source,
         std::string target;
         parsed_lists_meta_value.ModifyCacheMoveRightForBlock(0, count - 1, 1);
         parsed_lists_meta_value.ModifyCacheIndex(0, right_index);
-
+        statistic++;
         int32_t log_index = parsed_lists_meta_value.log_index();
         if (log_index >= lists_log_count_) {
             batch.Put(handles_[0], source, *meta_value);
@@ -1090,6 +1107,7 @@ Status RedisLists::RPoplpush(const Slice& source,
             *element = target;
         }
         s = db_->Write(default_write_options_, &batch);
+        UpdateSpecificKeyStatistics(source.ToString(), statistic);
         if (s.ok()) {
             delete meta_info->second;
             meta_info->second = meta_value;
@@ -1208,6 +1226,7 @@ Status RedisLists::RPoplpush(const Slice& source,
   }
 
   s = db_->Write(default_write_options_, &batch);
+
   if (s.ok()) {
     *element = target;
     delete meta_info->second;
@@ -1266,7 +1285,7 @@ Status RedisLists::RPush(const Slice& key,
         EncodeFixed32(buf, 0);
         batch.Put(handles_[3], key, Slice(buf, sizeof(int32_t)));
     } else {
-        char buf[4];
+        char buf[4]; 
         ListsMetaKeyLog lists_meta_key_log(key, parsed_lists_meta_value.version(), log_index);
         ListsMetaValueLog lists_meta_value_log(ParsedListsMetaValue::LIST_META_VALUE_RPUSH, values.size());
         parsed_lists_meta_value.ModifyLogIndex(1);
@@ -1550,8 +1569,10 @@ Status RedisLists::Del(const Slice& key) {
       delete meta_value;
       return Status::NotFound();
     } else {
+      uint32_t statistic = parsed_lists_meta_value.count();
       parsed_lists_meta_value.InitialMetaValue();
       s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
     if (s.ok()) {
         delete meta_info->second;

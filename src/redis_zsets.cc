@@ -215,6 +215,7 @@ Status RedisZSets::ZAdd(const Slice& key,
                         const std::vector<ScoreMember>& score_members,
                         int32_t* ret) {
   *ret = 0;
+  uint32_t statistic = 0;
   std::unordered_set<std::string> unique;
   std::vector<ScoreMember> filtered_score_members;
   for (const auto& sm : score_members) {
@@ -270,6 +271,9 @@ Status RedisZSets::ZAdd(const Slice& key,
           } else {
             ZSetsScoreKey zsets_score_key(key, version, old_score, sm.member);
             batch.Delete(handles_[2], zsets_score_key.Encode());
+            // delete old zsets_score_key and overwirte zsets_member_key
+            // but in different column_families so we accumulative 1
+            statistic++;
           }
         } else if (!s.IsNotFound()) {
           return s;
@@ -316,6 +320,7 @@ Status RedisZSets::ZAdd(const Slice& key,
     *ret = filtered_score_members.size();
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_zset_.end()) {
           delete meta_info->second;
@@ -418,6 +423,7 @@ Status RedisZSets::ZIncrby(const Slice& key,
                            double increment,
                            double* ret) {
   *ret = 0;
+  uint32_t statistic = 0;
   double score = 0;
   char score_buf[8];
   int32_t version = 0;
@@ -448,6 +454,9 @@ Status RedisZSets::ZIncrby(const Slice& key,
       score = old_score + increment;
       ZSetsScoreKey zsets_score_key(key, version, old_score, member);
       batch.Delete(handles_[2], zsets_score_key.Encode());
+      // delete old zsets_score_key and overwirte zsets_member_key
+      // but in different column_families so we accumulative 1
+      statistic++;
     } else if (s.IsNotFound()) {
       score = increment;
       parsed_zsets_meta_value.ModifyCount(1);
@@ -474,6 +483,7 @@ Status RedisZSets::ZIncrby(const Slice& key,
   batch.Put(handles_[2], zsets_score_key.Encode(), Slice("0"));
   *ret = score;
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_zset_.end()) {
           delete meta_info->second;
@@ -656,6 +666,7 @@ Status RedisZSets::ZRem(const Slice& key,
                         std::vector<std::string> members,
                         int32_t* ret) {
   *ret = 0;
+  uint32_t statistic = 0;
   std::unordered_set<std::string> unique;
   std::vector<std::string> filtered_members;
   for (const auto& member : members) {
@@ -692,6 +703,7 @@ Status RedisZSets::ZRem(const Slice& key,
         s = db_->Get(default_read_options_, handles_[1], zsets_member_key.Encode(), &data_value);
         if (s.ok()) {
           del_cnt++;
+          statistic++;
           uint64_t tmp = DecodeFixed64(data_value.data());
           const void* ptr_tmp = reinterpret_cast<const void*>(&tmp);
           double score = *reinterpret_cast<const double*>(ptr_tmp);
@@ -712,6 +724,7 @@ Status RedisZSets::ZRem(const Slice& key,
     return Status::NotFound();
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       delete meta_info->second;
       meta_info->second = meta_value;
@@ -726,6 +739,7 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
                                    int32_t stop,
                                    int32_t* ret) {
   *ret = 0;
+  uint32_t statistic = 0;
   std::string *meta_value;
   shannon::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
@@ -765,6 +779,7 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
           batch.Delete(handles_[1], zsets_member_key.Encode());
           batch.Delete(handles_[2], iter->key());
           del_cnt++;
+          statistic++;
         }
       }
       delete iter;
@@ -776,6 +791,7 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
     return Status::NotFound();
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       delete meta_info->second;
       meta_info->second = meta_value;
@@ -792,6 +808,7 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
                                     bool right_close,
                                     int32_t* ret) {
   *ret = 0;
+  uint32_t statistic = 0;
   std::string *meta_value;
   shannon::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
@@ -837,6 +854,7 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
           batch.Delete(handles_[1], zsets_member_key.Encode());
           batch.Delete(handles_[2], iter->key());
           del_cnt++;
+          statistic++;
         }
         if (!right_pass) {
           break;
@@ -851,6 +869,7 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
     return Status::NotFound();
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       delete meta_info->second;
       meta_info->second = meta_value;
@@ -1066,6 +1085,7 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
                                const AGGREGATE agg,
                                int32_t* ret) {
   *ret = 0;
+  uint32_t statistic = 0;
   shannon::WriteBatch batch;
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot = nullptr;
@@ -1126,6 +1146,7 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
     meta_value->resize(meta_info->second->size());
     memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
     ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+    statistic = parsed_zsets_meta_value.count();
     version = parsed_zsets_meta_value.InitialMetaValue();
     parsed_zsets_meta_value.set_count(member_score_map.size());
     batch.Put(handles_[0], destination, *meta_value);
@@ -1151,6 +1172,7 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
   }
   *ret = member_score_map.size();
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(destination.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_zset_.end()) {
           delete meta_info->second;
@@ -1174,6 +1196,7 @@ Status RedisZSets::ZInterstore(const Slice& destination,
   }
 
   *ret = 0;
+  uint32_t statistic = 0;
   shannon::WriteBatch batch;
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot = nullptr;
@@ -1261,6 +1284,7 @@ Status RedisZSets::ZInterstore(const Slice& destination,
     meta_value->resize(meta_info->second->size());
     memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
     ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+    statistic = parsed_zsets_meta_value.count();
     version = parsed_zsets_meta_value.InitialMetaValue();
     parsed_zsets_meta_value.set_count(final_score_members.size());
     batch.Put(handles_[0], destination, *meta_value);
@@ -1286,6 +1310,7 @@ Status RedisZSets::ZInterstore(const Slice& destination,
   }
   *ret = final_score_members.size();
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(destination.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_zset_.end()) {
           delete meta_info->second;
@@ -1381,6 +1406,7 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
                                   bool right_close,
                                   int32_t* ret) {
   *ret = 0;
+  uint32_t statistic = 0;
   shannon::WriteBatch batch;
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot = nullptr;
@@ -1439,6 +1465,7 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
           ZSetsScoreKey zsets_score_key(key, version, score, member);
           batch.Delete(handles_[2], zsets_score_key.Encode());
           del_cnt++;
+          statistic++;
         }
         if (!right_pass) {
           break;
@@ -1455,6 +1482,7 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
     return Status::NotFound();
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       delete meta_info->second;
       meta_info->second = meta_value;
@@ -1521,8 +1549,10 @@ Status RedisZSets::Del(const Slice& key) {
       delete meta_value;
       return Status::NotFound();
     } else {
+      uint32_t statistic = parsed_zsets_meta_value.count();
       parsed_zsets_meta_value.InitialMetaValue();
       s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
     if (s.ok()) {
         delete meta_info->second;

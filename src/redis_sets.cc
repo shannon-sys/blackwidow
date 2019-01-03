@@ -20,7 +20,6 @@ namespace blackwidow {
 std::unordered_map<std::string, std::string*> meta_infos_set_;
 RedisSets::RedisSets(BlackWidow* const bw, const DataType& type)
     : Redis(bw, type) {
-  spop_counts_store_.max_size_ = 1000;
 }
 
 RedisSets::~RedisSets() {
@@ -456,12 +455,14 @@ Status RedisSets::SDiffstore(const Slice& destination,
     return Status::NotFound();
   }
 
+  uint32_t statistic = 0;
   meta_info = meta_infos_set_.find(destination.data());
   if (meta_info != meta_infos_set_.end()) {
     meta_value = new std::string();
     meta_value->resize(12);
     memcpy(const_cast<char *>(meta_value->data()), meta_info->second, meta_info->second->size());
     ParsedSetsMetaValue parsed_sets_meta_value(meta_value);
+    statistic = parsed_sets_meta_value.count();
     version = parsed_sets_meta_value.InitialMetaValue();
     parsed_sets_meta_value.set_count(members.size());
     batch.Put(handles_[0], destination, *meta_value);
@@ -479,6 +480,7 @@ Status RedisSets::SDiffstore(const Slice& destination,
   }
   *ret = members.size();
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(destination.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_set_.end()) {
           delete meta_info->second;
@@ -657,12 +659,14 @@ Status RedisSets::SInterstore(const Slice& destination,
     }
   }
 
+  uint32_t statistic = 0;
   meta_info = meta_infos_set_.find(destination.data());
   if (meta_info != meta_infos_set_.end()) {
     meta_value = new std::string();
     meta_value->resize(meta_info->second->size());
     memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
     ParsedSetsMetaValue parsed_sets_meta_value(meta_value);
+    statistic = parsed_sets_meta_value.count();
     version = parsed_sets_meta_value.InitialMetaValue();
     parsed_sets_meta_value.set_count(members.size());
     batch.Put(handles_[0], destination, *meta_value);
@@ -680,6 +684,7 @@ Status RedisSets::SInterstore(const Slice& destination,
   }
   *ret = members.size();
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(destination.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_set_.end()) {
           delete meta_info->second;
@@ -766,6 +771,7 @@ Status RedisSets::SMove(const Slice& source, const Slice& destination,
 
   std::string *meta_value1, *meta_value2;
   int32_t version = 0;
+  uint32_t statistic = 0;
   std::vector<std::string> keys {source.ToString(), destination.ToString()};
   MultiScopeRecordLock ml(lock_mgr_, keys);
   std::unordered_map<std::string, std::string*>::iterator meta_info1, meta_info2;
@@ -796,6 +802,7 @@ Status RedisSets::SMove(const Slice& source, const Slice& destination,
         parsed_sets_meta_value.ModifyCount(-1);
         batch.Put(handles_[0], source, *meta_value1);
         batch.Delete(handles_[1], sets_member_key.Encode());
+        statistic++;
       } else if (s.IsNotFound()) {
         *ret = 0;
         return Status::NotFound();
@@ -845,6 +852,7 @@ Status RedisSets::SMove(const Slice& source, const Slice& destination,
     batch.Put(handles_[1], sets_member_key.Encode(), Slice("0"));
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(source.ToString(), 1);
   if (s.ok()) {
       delete meta_info1->second;
       meta_info1->second = meta_value1;
@@ -871,7 +879,6 @@ Status RedisSets::SPop(const Slice& key, std::string* member, bool* need_compact
   std::unordered_map<std::string, std::string*>::iterator meta_info;
   Status s;
 
-  uint64_t start_us = slash::NowMicros();
   meta_info = meta_infos_set_.find(key.data());
   if (meta_info != meta_infos_set_.end()) {
     meta_value = new std::string();
@@ -912,15 +919,7 @@ Status RedisSets::SPop(const Slice& key, std::string* member, bool* need_compact
   } else {
     return Status::NotFound();
   }
-
-  uint64_t count = 0;
-  uint64_t duration = slash::NowMicros() - start_us;
-  AddAndGetSpopCount(key.ToString(), &count);
-  if (duration >= SPOP_COMPACT_THRESHOLD_DURATION
-    || count >= SPOP_COMPACT_THRESHOLD_COUNT) {
-    *need_compact = true;
-    ResetSpopCount(key.ToString());
-  }
+  UpdateSpecificKeyStatistics(key.ToString(), 1 * 5);
   s = db_->Write(default_write_options_, &batch);
   if (s.ok()) {
       delete meta_info->second;
@@ -929,35 +928,6 @@ Status RedisSets::SPop(const Slice& key, std::string* member, bool* need_compact
       delete meta_value;
   }
   return s;
-}
-
-Status RedisSets::ResetSpopCount(const std::string& key) {
-  slash::MutexLock l(&spop_counts_mutex_);
-  if (spop_counts_store_.map_.find(key) == spop_counts_store_.map_.end()) {
-    return Status::NotFound();
-  }
-  spop_counts_store_.map_.erase(key);
-  spop_counts_store_.list_.remove(key);
-  return Status::OK();
-}
-
-Status RedisSets::AddAndGetSpopCount(const std::string& key, uint64_t* count) {
-  slash::MutexLock l(&spop_counts_mutex_);
-  if (spop_counts_store_.map_.find(key) == spop_counts_store_.map_.end()) {
-    *count = ++spop_counts_store_.map_[key];
-    spop_counts_store_.list_.push_front(key);
-  } else {
-    *count = ++spop_counts_store_.map_[key];
-    spop_counts_store_.list_.remove(key);
-    spop_counts_store_.list_.push_front(key);
-  }
-
-  if (spop_counts_store_.list_.size() > spop_counts_store_.max_size_) {
-    std::string tail = spop_counts_store_.list_.back();
-    spop_counts_store_.map_.erase(tail);
-    spop_counts_store_.list_.pop_back();
-  }
-  return Status::OK();
 }
 
 Status RedisSets::SRandmember(const Slice& key, int32_t count,
@@ -1040,6 +1010,7 @@ Status RedisSets::SRem(const Slice& key,
   ScopeRecordLock l(lock_mgr_, key);
 
   int32_t version = 0;
+  uint32_t statistic = 0;
   std::string *meta_value;
   std::unordered_map<std::string, std::string*>::iterator meta_info;
   Status s;
@@ -1062,6 +1033,7 @@ Status RedisSets::SRem(const Slice& key,
                 sets_member_key.Encode(), &member_value);
         if (s.ok()) {
           cnt++;
+          statistic++;
           batch.Delete(handles_[1], sets_member_key.Encode());
         } else if (s.IsNotFound()) {
         } else {
@@ -1077,6 +1049,7 @@ Status RedisSets::SRem(const Slice& key,
     return Status::NotFound();
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       delete meta_info->second;
       meta_info->second = meta_value;
@@ -1189,12 +1162,14 @@ Status RedisSets::SUnionstore(const Slice& destination,
     delete iter;
   }
 
+  uint32_t statistic = 0;
   meta_info = meta_infos_set_.find(destination.data());
   if (meta_info != meta_infos_set_.end()) {
     meta_value = new std::string();
     meta_value->resize(meta_info->second->size());
     memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
     ParsedSetsMetaValue parsed_sets_meta_value(meta_value);
+    statistic = parsed_sets_meta_value.count();
     version = parsed_sets_meta_value.InitialMetaValue();
     parsed_sets_meta_value.set_count(members.size());
     batch.Put(handles_[0], destination, *meta_value);
@@ -1212,6 +1187,7 @@ Status RedisSets::SUnionstore(const Slice& destination,
   }
   *ret = members.size();
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(destination.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_set_.end()) {
           delete meta_info->second;
@@ -1479,8 +1455,10 @@ Status RedisSets::Del(const Slice& key) {
       delete meta_value;
       return Status::NotFound();
     } else {
+      uint32_t statistic = parsed_sets_meta_value.count();
       parsed_sets_meta_value.InitialMetaValue();
       s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
     if (s.ok()) {
         delete meta_info->second;

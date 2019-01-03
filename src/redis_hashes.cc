@@ -154,7 +154,6 @@ Status RedisHashes::ScanKeyNum(uint64_t* num) {
 
 Status RedisHashes::ScanKeys(const std::string& pattern,
                              std::vector<std::string>* keys) {
-
   std::string key;
   shannon::ReadOptions iterator_options;
   const shannon::Snapshot* snapshot;
@@ -182,6 +181,7 @@ Status RedisHashes::ScanKeys(const std::string& pattern,
 Status RedisHashes::HDel(const Slice& key,
                          const std::vector<std::string>& fields,
                          int32_t* ret) {
+  uint32_t statistic = 0;
   std::vector<std::string> filtered_fields;
   std::unordered_set<std::string> field_set;
   for (auto iter = fields.begin(); iter != fields.end(); ++iter) {
@@ -217,7 +217,7 @@ Status RedisHashes::HDel(const Slice& key,
     } else {
       std::string data_value;
       version = parsed_hashes_meta_value.version();
-      int32_t hlen = parsed_hashes_meta_value.count();
+
       for (const auto& field : filtered_fields) {
         HashesDataKey hashes_data_key(key, version, field);
         s = db_->Get(read_options, handles_[1],
@@ -233,8 +233,7 @@ Status RedisHashes::HDel(const Slice& key,
         }
       }
       *ret = del_cnt;
-      hlen -= del_cnt;
-      parsed_hashes_meta_value.set_count(hlen);
+      parsed_hashes_meta_value.ModifyCount(-del_cnt);
       batch.Put(handles_[0], key, *meta_value);
     }
   } else {
@@ -242,6 +241,7 @@ Status RedisHashes::HDel(const Slice& key,
     return Status::OK();
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       delete meta_info->second;
       meta_info->second = meta_value;
@@ -321,6 +321,7 @@ Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
   ScopeRecordLock l(lock_mgr_, key);
 
   int32_t version = 0;
+  uint32_t statistic = 0;
   std::string old_value;
   std::string *meta_value;
   Status s;
@@ -341,6 +342,7 @@ Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
       char buf[32];
       Int64ToStr(buf, 32, value);
       batch.Put(handles_[1], hashes_data_key.Encode(), buf);
++     statistic++;
       *ret = value;
     } else {
       version = parsed_hashes_meta_value.version();
@@ -386,6 +388,7 @@ Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
     *ret = value;
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
     if (meta_info != meta_infos_hashes_.end()) {
         delete meta_info->second;
@@ -406,6 +409,7 @@ Status RedisHashes::HIncrbyfloat(const Slice& key, const Slice& field,
   ScopeRecordLock l(lock_mgr_, key);
 
   int32_t version = 0;
+  uint32_t statistic = 0;
   std::string *meta_value;
   std::string old_value_str;
   Status s;
@@ -448,6 +452,7 @@ Status RedisHashes::HIncrbyfloat(const Slice& key, const Slice& field,
           return Status::InvalidArgument("Overflow");
         }
         batch.Put(handles_[1], hashes_data_key.Encode(), *new_value);
+        statistic++;
       } else if (s.IsNotFound()) {
         LongDoubleToStr(long_double_by, new_value);
         parsed_hashes_meta_value.ModifyCount(1);
@@ -470,6 +475,7 @@ Status RedisHashes::HIncrbyfloat(const Slice& key, const Slice& field,
     batch.Put(handles_[1], hashes_data_key.Encode(), *new_value);
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_hashes_.end()) {
           delete meta_info->second;
@@ -586,6 +592,7 @@ Status RedisHashes::HMGet(const Slice& key,
 
 Status RedisHashes::HMSet(const Slice& key,
                           const std::vector<FieldValue>& fvs) {
+  uint32_t statistic = 0;
   std::unordered_set<std::string> fields;
   std::vector<FieldValue> filtered_fvs;
   for (auto iter = fvs.rbegin(); iter != fvs.rend(); ++iter) {
@@ -627,6 +634,7 @@ Status RedisHashes::HMSet(const Slice& key,
         s = db_->Get(default_read_options_, handles_[1],
                 hashes_data_key.Encode(), &data_value);
         if (s.ok()) {
+          statistic++;
           batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
         } else if (s.IsNotFound()) {
           count++;
@@ -652,6 +660,7 @@ Status RedisHashes::HMSet(const Slice& key,
     }
   }
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
     if (meta_info != meta_infos_hashes_.end()) {
         delete meta_info->second;
@@ -671,6 +680,7 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
   ScopeRecordLock l(lock_mgr_, key);
 
   int32_t version = 0;
+  uint32_t statistic = 0;
   std::string *meta_value;
   std::unordered_map<std::string, std::string*>::iterator meta_info =
       meta_infos_hashes_.find(key.data());
@@ -706,6 +716,7 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
           return Status::OK();
         } else {
           batch.Put(handles_[1], hashes_data_key.Encode(), value);
+          statistic++;
         }
       } else if (s.IsNotFound()) {
         parsed_hashes_meta_value.ModifyCount(1);
@@ -738,6 +749,7 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
   }
 
   s = db_->Write(default_write_options_, &batch);
+  UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_hashes_.end()) {
           delete meta_info->second;
@@ -1298,8 +1310,10 @@ Status RedisHashes::Del(const Slice& key) {
       delete meta_value;
       return Status::NotFound();
     } else {
+      uint32_t statistic = parsed_hashes_meta_value.count();
       parsed_hashes_meta_value.InitialMetaValue();
       s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
     if (s.ok()) {
         delete meta_info->second;

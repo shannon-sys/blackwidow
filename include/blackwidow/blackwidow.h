@@ -43,7 +43,7 @@ const std::string LISTS_DB = "lists";
 const std::string ZSETS_DB = "zsets";
 const std::string SETS_DB = "sets";
 
-const uint32_t COMPACT_THRESHOLD_COUNT = 5000;
+const uint32_t COMPACT_THRESHOLD_COUNT = 2000;
 
 using Options = shannon::Options;
 using BlockBasedTableOptions = shannon::BlockBasedTableOptions;
