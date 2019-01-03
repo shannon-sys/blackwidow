@@ -26,7 +26,7 @@ class RedisZSets : public Redis {
                                 const shannon::Slice* end,
                                 const ColumnFamilyType& type = kMetaAndData) override;
     virtual Status GetProperty(const std::string& property, uint64_t* out) override;
-    virtual Status ScanKeyNum(uint64_t* num) override;
+    Status ScanKeyNum(VaildAndInVaildKeyNum* vaild_and_invaild_key_num) override;
     virtual Status ScanKeys(const std::string& pattern,
                             std::vector<std::string>* keys) override;
 

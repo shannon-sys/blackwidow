@@ -129,9 +129,9 @@ Status RedisHashes::GetProperty(const std::string& property, uint64_t* out) {
   return Status::OK();
 }
 
-Status RedisHashes::ScanKeyNum(uint64_t* num) {
-
-  uint64_t count = 0;
+Status RedisHashes::ScanKeyNum(VaildAndInVaildKeyNum* vaild_and_invaild_key_num) {
+  uint64_t vaild = 0;
+  uint64_t invaild = 0;
   shannon::ReadOptions iterator_options;
   const shannon::Snapshot* snapshot;
   ScopeSnapshot ss(db_, &snapshot);
@@ -143,12 +143,15 @@ Status RedisHashes::ScanKeyNum(uint64_t* num) {
        iter->Valid();
        iter->Next()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(iter->value());
-    if (!parsed_hashes_meta_value.IsStale()
-      && parsed_hashes_meta_value.count() != 0) {
-      count++;
+    if (parsed_hashes_meta_value.IsStale()
+      || parsed_hashes_meta_value.count() == 0) {
+      invaild++;
+    } else {
+      vaild++;
     }
   }
-  *num = count;
+  vaild_and_invaild_key_num->vaild_key_num = vaild;
+  vaild_and_invaild_key_num->invaild_key_num = invaild;
   delete iter;
   return Status::OK();
 }
@@ -1275,9 +1278,7 @@ Status RedisHashes::Expire(const Slice& key, int32_t ttl) {
        db_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
       }
     } else {
-      parsed_hashes_meta_value.set_count(0);
-      parsed_hashes_meta_value.UpdateVersion();
-      parsed_hashes_meta_value.set_timestamp(0);
+      parsed_hashes_meta_value.InitialMetaValue();
       s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
     }
     if (s.ok()) {

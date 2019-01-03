@@ -85,6 +85,11 @@ struct KeyValue {
   }
 };
 
+struct VaildAndInVaildKeyNum {
+  uint64_t vaild_key_num;
+  uint64_t invaild_key_num;
+};
+
 struct ValueStatus {
   std::string value;
   Status status;
@@ -1090,7 +1095,7 @@ class BlackWidow {
   Status GetUsage(const std::string& type, uint64_t *result);
   uint64_t GetProperty(const std::string &property);
 
-  Status GetKeyNum(std::vector<uint64_t>* nums);
+  Status GetKeyNum(std::vector<VaildAndInVaildKeyNum>* vaild_and_invaild_key_nums);
   Status StopScanKeyNum();
 
   shannon::DB* GetDBByType(const std::string& type);
