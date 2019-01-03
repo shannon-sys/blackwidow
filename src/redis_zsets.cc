@@ -15,8 +15,13 @@
 #include "src/scope_record_lock.h"
 #include "src/scope_snapshot.h"
 using namespace std;
-std::unordered_map<std::string, std::string*> meta_infos_zset_;
+
 namespace blackwidow {
+std::unordered_map<std::string, std::string*> meta_infos_zset_;
+RedisZSets::RedisZSets(BlackWidow* const bw, const DataType& type)
+    : Redis(bw, type) {
+}
+
 shannon::Comparator* ZSetsScoreKeyComparator() {
   static ZSetsScoreKeyComparatorImpl zsets_score_key_compare;
   return &zsets_score_key_compare;

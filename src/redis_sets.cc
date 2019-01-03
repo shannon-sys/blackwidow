@@ -18,7 +18,8 @@
 
 namespace blackwidow {
 std::unordered_map<std::string, std::string*> meta_infos_set_;
-RedisSets::RedisSets() {
+RedisSets::RedisSets(BlackWidow* const bw, const DataType& type)
+    : Redis(bw, type) {
   spop_counts_store_.max_size_ = 1000;
 }
 

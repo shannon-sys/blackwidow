@@ -91,35 +91,35 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
     bw_options.block_cache_size = 100;
     bw_options.table_options.block_cache = shannon::NewLRUCache(bw_options.block_cache_size);
   }
-  strings_db_ = new RedisStrings();
+  strings_db_ = new RedisStrings(this, kStrings);
   Status s = strings_db_->Open(bw_options, AppendSubDirectory(db_path, "strings"));
   if (!s.ok()) {
     fprintf (stderr, "[FATAL] open kv db failed, %s\n", s.ToString().c_str());
     exit(-1);
   }
 
-  hashes_db_ = new RedisHashes();
+  hashes_db_ = new RedisHashes(this, kHashes);
   s = hashes_db_->Open(bw_options, AppendSubDirectory(db_path, "hashes"));
   if (!s.ok()) {
     fprintf (stderr, "[FATAL] open hashes db failed, %s\n", s.ToString().c_str());
     exit(-1);
   }
 
-  sets_db_ = new RedisSets();
+  sets_db_ = new RedisSets(this, kSets);
   s = sets_db_->Open(bw_options, AppendSubDirectory(db_path, "sets"));
   if (!s.ok()) {
     fprintf (stderr, "[FATAL] open set db failed, %s\n", s.ToString().c_str());
     exit(-1);
   }
 
-  lists_db_ = new RedisLists();
+  lists_db_ = new RedisLists(this, kLists);
   s = lists_db_->Open(bw_options, AppendSubDirectory(db_path, "lists"));
   if (!s.ok()) {
     fprintf (stderr, "[FATAL] open list db failed, %s\n", s.ToString().c_str());
     exit(-1);
   }
 
-  zsets_db_ = new RedisZSets();
+  zsets_db_ = new RedisZSets(this, kZSets);
   s = zsets_db_->Open(bw_options, AppendSubDirectory(db_path, "zsets"));
   if (!s.ok()) {
     fprintf (stderr, "[FATAL] open zset db failed, %s\n", s.ToString().c_str());
@@ -1768,10 +1768,16 @@ Status BlackWidow::CompactKey(const DataType& type, const std::string& key) {
   Status s;
   std::string start_key, end_key;
   CalculateStartAndEndKey(key, &start_key, &end_key);
+  Slice slice_begin(start_key);
+  Slice slice_end(end_key);
   if (type == kSets) {
-    Slice slice_begin(start_key);
-    Slice slice_end(end_key);
     s = sets_db_->CompactRange(&slice_begin, &slice_end);
+  } else if (type == kZSets) {
+    s = zsets_db_->CompactRange(&slice_begin, &slice_end);
+  } else if (type == kHashes) {
+    s = hashes_db_->CompactRange(&slice_begin, &slice_end);
+  } else if (type == kLists) {
+    s = lists_db_->CompactRange(&slice_begin, &slice_end);
   }
   return s;
 }

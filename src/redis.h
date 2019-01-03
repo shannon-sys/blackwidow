@@ -25,7 +25,7 @@ using Status = shannon::Status;
 using Slice = shannon::Slice;
 class Redis {
  public:
-  Redis();
+  Redis(BlackWidow* const bw, const DataType& type);
   virtual ~Redis();
 
   shannon::DB* GetDB() {
@@ -59,6 +59,8 @@ class Redis {
   };
   virtual  Status AddDelKey(BlackWidow * bw,const string & str) = 0;
  protected:
+  BlackWidow* const bw_;
+  DataType type_;
   LockMgr* lock_mgr_;
   shannon::DB* db_;
   std::string default_device_name_ = "/dev/kvdev0";
@@ -72,6 +74,13 @@ class Redis {
 
   Status GetScanStartPoint(const Slice& key, const Slice& pattern, int64_t cursor, std::string* start_point);
   Status StoreScanNextPoint(const Slice& key, const Slice& pattern, int64_t cursor, const std::string& next_point);
+
+  // For Statistics
+  slash::Mutex statistics_mutex_;
+  BlackWidow::LRU<std::string, uint32_t> statistics_store_;
+
+  Status UpdateSpecificKeyStatistics(const std::string& key, uint32_t count);
+  Status AddCompactKeyTaskIfNeeded(const std::string& key, uint32_t total);
 };
 
 }  //  namespace blackwidow

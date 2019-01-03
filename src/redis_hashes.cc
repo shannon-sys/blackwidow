@@ -13,6 +13,10 @@
 #include "src/scope_snapshot.h"
 
 namespace blackwidow {
+RedisHashes::RedisHashes(BlackWidow* const bw, const DataType& type)
+    : Redis(bw, type) {
+}
+
 std::unordered_map<std::string, std::string*> meta_infos_hashes_;
 RedisHashes::~RedisHashes() {
   std::vector<shannon::ColumnFamilyHandle*> tmp_handles = handles_;

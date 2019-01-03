@@ -16,9 +16,13 @@
 #include "src/scope_record_lock.h"
 #include "src/scope_snapshot.h"
 using namespace std;
-std::unordered_map<std::string, std::string*> meta_infos_list_;
-namespace blackwidow {
 
+namespace blackwidow {
+RedisLists::RedisLists(BlackWidow* const bw, const DataType& type)
+    : Redis(bw, type) {
+}
+
+std::unordered_map<std::string, std::string*> meta_infos_list_;
 const shannon::Comparator* ListsDataKeyComparator() {
   static ListsDataKeyComparatorImpl ldkc;
   return &ldkc;
