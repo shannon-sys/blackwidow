@@ -1602,6 +1602,8 @@ Status RedisSets::Expireat(const Slice& key, int32_t timestamp) {
         EncodeFixed32(str,parsed_sets_meta_value.timestamp());
         memcpy(str + sizeof(int32_t) , key.data(),key.size());
         db_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
+      } else {
+        parsed_sets_meta_value.InitialMetaValue();
       }
       s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
     }

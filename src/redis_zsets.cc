@@ -1637,13 +1637,15 @@ Status RedisZSets::Expireat(const Slice& key, int32_t timestamp) {
     } else if (parsed_zsets_meta_value.count() == 0) {
       return Status::NotFound();
     } else {
-      parsed_zsets_meta_value.set_timestamp(timestamp);
-      if (parsed_zsets_meta_value.timestamp() != 0 ) {
+      if (timestamp > 0) {
+        parsed_zsets_meta_value.set_timestamp(timestamp);
         char str[sizeof(int32_t)+key.size() +1];
         str[sizeof(int32_t)+key.size() ] = '\0';
         EncodeFixed32(str,parsed_zsets_meta_value.timestamp());
         memcpy(str + sizeof(int32_t) , key.data(),key.size());
         db_->Put(default_write_options_,handles_[3], {str,sizeof(int32_t)+key.size()}, "1" );
+      } else {
+        parsed_zsets_meta_value.InitialMetaValue();
       }
       s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
     }

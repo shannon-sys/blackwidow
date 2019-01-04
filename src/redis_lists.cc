@@ -1659,16 +1659,18 @@ Status RedisLists::Expireat(const Slice& key, int32_t timestamp) {
       return Status::NotFound();
     } else {
       int32_t old_timestamp = parsed_lists_meta_value.timestamp();
-      parsed_lists_meta_value.set_timestamp(timestamp);
-      if (parsed_lists_meta_value.timestamp() != 0 ) {
-        char str[sizeof(int32_t)+key.size() +1];
+      if (timestamp > 0) {
+        parsed_lists_meta_value.set_timestamp(timestamp);
+        char str[sizeof(int32_t) + key.size() + 1];
         EncodeFixed32(str,parsed_lists_meta_value.timestamp());
         memcpy(str + sizeof(int32_t) , key.data(),key.size());
         db_->Put(default_write_options_,handles_[4], {str,sizeof(int32_t)+key.size()}, "1" );
+      } else {
+        parsed_lists_meta_value.InitialMetaValue();
       }
       s = db_->Put(default_write_options_, handles_[0], key, *meta_info->second);
       if (!s.ok()) {
-          parsed_lists_meta_value.set_timestamp(old_timestamp);
+        parsed_lists_meta_value.set_timestamp(old_timestamp);
       }
     }
   }
@@ -1687,6 +1689,10 @@ Status RedisLists::Persist(const Slice& key) {
       return Status::NotFound();
     } else {
       int32_t old_timestamp = parsed_lists_meta_value.timestamp();
+      uint32_t old_count = parsed_lists_meta_value.count();
+      int32_t old_log_index = parsed_lists_meta_value.log_index();
+      uint64_t old_index = parsed_lists_meta_value.index();
+      int32_t old_version = parsed_lists_meta_value.version();
       if (old_timestamp == 0) {
         return Status::NotFound("Not have an associated timeout");
       } else {
@@ -1694,6 +1700,10 @@ Status RedisLists::Persist(const Slice& key) {
         s = db_->Put(default_write_options_, handles_[0], key, *meta_info->second);
         if (!s.ok()) {
             parsed_lists_meta_value.set_timestamp(old_timestamp);
+            parsed_lists_meta_value.set_count(old_count);
+            parsed_lists_meta_value.set_log_index(old_log_index);
+            parsed_lists_meta_value.set_current_index(old_index);
+            parsed_lists_meta_value.set_version(old_version);
         }
       }
     }

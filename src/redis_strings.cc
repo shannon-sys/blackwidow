@@ -1263,13 +1263,17 @@ Status RedisStrings::Expireat(const Slice& key, int32_t timestamp) {
     if (parsed_strings_value.IsStale()) {
       return Status::NotFound("Stale");
     } else {
-      parsed_strings_value.set_timestamp(timestamp);
-      char str[sizeof(int32_t)+key.size() +1];
-      str[sizeof(int32_t)+key.size() ] = '\0';
-      EncodeFixed32(str,parsed_strings_value.timestamp());
-      memcpy(str + sizeof(int32_t) , key.data(),key.size());
-      db_->Put(default_write_options_,handles_[1],{str,sizeof(int32_t)+key.size()}, "1" );
-      return db_->Put(default_write_options_, key, value);
+      if (timestamp > 0) {
+        parsed_strings_value.set_timestamp(timestamp);
+        char str[sizeof(int32_t)+key.size() +1];
+        str[sizeof(int32_t)+key.size() ] = '\0';
+        EncodeFixed32(str,parsed_strings_value.timestamp());
+        memcpy(str + sizeof(int32_t) , key.data(),key.size());
+        db_->Put(default_write_options_,handles_[1],{str,sizeof(int32_t)+key.size()}, "1" );
+        return db_->Put(default_write_options_, key, value);
+      } else {
+        return db_->Delete(default_write_options_, key);
+      }
     }
   }
   return s;
