@@ -212,7 +212,8 @@ Status RedisSets::SAdd(const Slice& key,
     meta_value->resize(meta_info->second->size());
     memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
     ParsedSetsMetaValue parsed_sets_meta_value(meta_value);
-    if (parsed_sets_meta_value.IsStale()) {
+    if (parsed_sets_meta_value.IsStale()
+      || parsed_sets_meta_value.count() == 0) {
       version = parsed_sets_meta_value.InitialMetaValue();
       parsed_sets_meta_value.set_count(filtered_members.size());
       batch.Put(handles_[0], key, *meta_value);
@@ -705,6 +706,7 @@ Status RedisSets::SInterstore(const Slice& destination,
 
 Status RedisSets::SIsmember(const Slice& key, const Slice& member,
                             int32_t* ret) {
+  *ret = 0;
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot;
 
@@ -717,8 +719,9 @@ Status RedisSets::SIsmember(const Slice& key, const Slice& member,
   if (meta_info != meta_infos_set_.end()) {
     ParsedSetsMetaValue parsed_sets_meta_value(meta_info->second);
     if (parsed_sets_meta_value.IsStale()) {
-      *ret = 0;
       return Status::NotFound("Stale");
+    } else if (parsed_sets_meta_value.count() == 0) {
+      return Status::NotFound();
     } else {
       std::string member_value;
       version = parsed_sets_meta_value.version();
@@ -749,6 +752,8 @@ Status RedisSets::SMembers(const Slice& key,
     ParsedSetsMetaValue parsed_sets_meta_value(meta_info->second);
     if (parsed_sets_meta_value.IsStale()) {
       return Status::NotFound("Stale");
+    } else if (parsed_sets_meta_value.count() == 0) {
+      return Status::NotFound();
     } else {
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(key, version, Slice());
@@ -770,7 +775,7 @@ Status RedisSets::SMembers(const Slice& key,
 
 Status RedisSets::SMove(const Slice& source, const Slice& destination,
                         const Slice& member, int32_t* ret) {
-
+  *ret = 0;
   shannon::WriteBatch batch;
   shannon::ReadOptions read_options;
 
@@ -794,8 +799,9 @@ Status RedisSets::SMove(const Slice& source, const Slice& destination,
     memcpy(const_cast<char *>(meta_value1->data()), meta_info1->second->data(), meta_info1->second->size());
     ParsedSetsMetaValue parsed_sets_meta_value(meta_value1);
     if (parsed_sets_meta_value.IsStale()) {
-      *ret = 0;
       return Status::NotFound("Stale");
+    } else if (parsed_sets_meta_value.count() == 0) {
+      return Status::NotFound();
     } else {
       std::string member_value;
       version = parsed_sets_meta_value.version();
@@ -826,7 +832,8 @@ Status RedisSets::SMove(const Slice& source, const Slice& destination,
     meta_value2->resize(meta_info2->second->size());
     memcpy(const_cast<char *>(meta_value2->data()), meta_info2->second->data(), meta_info2->second->size());
     ParsedSetsMetaValue parsed_sets_meta_value(meta_value2);
-    if (parsed_sets_meta_value.IsStale()) {
+    if (parsed_sets_meta_value.IsStale()
+      || parsed_sets_meta_value.count() == 0) {
       version = parsed_sets_meta_value.InitialMetaValue();
       parsed_sets_meta_value.set_count(1);
       batch.Put(handles_[0], destination, *meta_value2);
@@ -1011,6 +1018,7 @@ Status RedisSets::SRandmember(const Slice& key, int32_t count,
 Status RedisSets::SRem(const Slice& key,
                        const std::vector<std::string>& members,
                        int32_t* ret) {
+  *ret = 0;
   shannon::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
@@ -1026,8 +1034,9 @@ Status RedisSets::SRem(const Slice& key,
     memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
     ParsedSetsMetaValue parsed_sets_meta_value(meta_value);
     if (parsed_sets_meta_value.IsStale()) {
-      *ret = 0;
       return Status::NotFound("stale");
+    } else if (parsed_sets_meta_value.count() == 0) {
+      return Status::NotFound();
     } else {
       int32_t cnt = 0;
       std::string member_value;
@@ -1576,6 +1585,9 @@ Status RedisSets::Persist(const Slice& key) {
     if (parsed_sets_meta_value.IsStale()) {
       delete meta_value;
       return Status::NotFound("Stale");
+    } else if (parsed_sets_meta_value.count() == 0) {
+      delete meta_value;
+      return Status::NotFound();
     } else {
       int32_t timestamp = parsed_sets_meta_value.timestamp();
       if (timestamp == 0) {

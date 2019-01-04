@@ -345,11 +345,9 @@ Status RedisLists::LInsert(const Slice& key,
     memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
     ParsedListsMetaValue parsed_lists_meta_value(meta_value);
     if (parsed_lists_meta_value.IsStale()) {
-      *ret = 0;
       delete meta_value;
       return Status::NotFound("Stale");
     } else if (parsed_lists_meta_value.count() == 0) {
-      *ret = 0;
       return Status::NotFound();
     } else {
       bool find_pivot = false;
@@ -1679,6 +1677,8 @@ Status RedisLists::Persist(const Slice& key) {
     ParsedListsMetaValue parsed_lists_meta_value(meta_info->second);
     if (parsed_lists_meta_value.IsStale()) {
       return Status::NotFound("Stale");
+    } else if (parsed_lists_meta_value.count() == 0) {
+      return Status::NotFound();
     } else {
       int32_t old_timestamp = parsed_lists_meta_value.timestamp();
       if (old_timestamp == 0) {

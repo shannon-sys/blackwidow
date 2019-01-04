@@ -1864,6 +1864,9 @@ Status RedisZSets::Persist(const Slice& key) {
     if (parsed_zsets_meta_value.IsStale()) {
       delete meta_value;
       return Status::NotFound("Stale");
+    } else if (parsed_zsets_meta_value.count() == 0) {
+      delete meta_value;
+      return Status::NotFound();
     } else {
       int32_t timestamp = parsed_zsets_meta_value.timestamp();
       if (timestamp == 0) {
