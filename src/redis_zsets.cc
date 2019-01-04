@@ -240,10 +240,11 @@ Status RedisZSets::ZAdd(const Slice& key,
     meta_value = new std::string();
     meta_value->resize(meta_info->second->size());
     memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
-    bool is_stale = false;
+    bool valid = true;
     ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
-    if (parsed_zsets_meta_value.IsStale()) {
-      is_stale = true;
+    if (parsed_zsets_meta_value.IsStale()
+      || parsed_zsets_meta_value.count() == 0) {
+      valid = false;
       version = parsed_zsets_meta_value.InitialMetaValue();
       if (parsed_zsets_meta_value.timestamp() != 0 ) {
         char str[sizeof(int32_t)+key.size() +1];
@@ -253,7 +254,7 @@ Status RedisZSets::ZAdd(const Slice& key,
         batch.Put(handles_[3], {str,sizeof(int32_t)+key.size()}, "1" );
       }
     } else {
-      is_stale = false;
+      valid = true;
       version = parsed_zsets_meta_value.version();
     }
 
@@ -262,7 +263,7 @@ Status RedisZSets::ZAdd(const Slice& key,
     for (const auto& sm : filtered_score_members) {
       bool not_found = true;
       ZSetsMemberKey zsets_member_key(key, version, sm.member);
-      if (!is_stale) {
+      if (valid) {
         s = db_->Get(default_read_options_, handles_[1], zsets_member_key.Encode(), &data_value);
         if (s.ok()) {
           not_found = false;
@@ -442,7 +443,8 @@ Status RedisZSets::ZIncrby(const Slice& key,
     meta_value->resize(meta_info->second->size());
     memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
     ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
-    if (parsed_zsets_meta_value.IsStale()) {
+    if (parsed_zsets_meta_value.IsStale()
+      || parsed_zsets_meta_value.count() == 0) {
       version = parsed_zsets_meta_value.InitialMetaValue();
     } else {
       version = parsed_zsets_meta_value.version();
