@@ -38,6 +38,9 @@ RedisSets::~RedisSets() {
 
 Status RedisSets::Open(const BlackwidowOptions& bw_options,
                        const std::string& db_path) {
+  statistics_store_.max_size_ = bw_options.statistics_max_size;
+  small_compaction_threshold_ = bw_options.small_compaction_threshold;
+
   shannon::Options ops(bw_options.options);
   Status s = shannon::DB::Open(ops, db_path, default_device_name_, &db_);
   if (s.ok()) {
