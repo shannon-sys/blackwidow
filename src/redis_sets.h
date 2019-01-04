@@ -93,6 +93,12 @@ class RedisSets : public Redis {
 
   private:
     std::vector<shannon::ColumnFamilyHandle*> handles_;
+
+    // For compact in time after multiple spop
+    slash::Mutex spop_counts_mutex_;
+    BlackWidow::LRU<std::string, uint64_t> spop_counts_store_;
+    Status ResetSpopCount(const std::string& key);
+    Status AddAndGetSpopCount(const std::string& key, uint64_t* count);
 };
 
 }  //  namespace blackwidow

@@ -20,6 +20,7 @@ namespace blackwidow {
 std::unordered_map<std::string, std::string*> meta_infos_set_;
 RedisSets::RedisSets(BlackWidow* const bw, const DataType& type)
     : Redis(bw, type) {
+  spop_counts_store_.max_size_ = 1000;
 }
 
 RedisSets::~RedisSets() {
@@ -894,6 +895,7 @@ Status RedisSets::SPop(const Slice& key, std::string* member, bool* need_compact
   std::unordered_map<std::string, std::string*>::iterator meta_info;
   Status s;
 
+  uint64_t start_us = slash::NowMicros();
   meta_info = meta_infos_set_.find(key.data());
   if (meta_info != meta_infos_set_.end()) {
     meta_value = new std::string();
@@ -934,7 +936,14 @@ Status RedisSets::SPop(const Slice& key, std::string* member, bool* need_compact
   } else {
     return Status::NotFound();
   }
-  UpdateSpecificKeyStatistics(key.ToString(), 1 * 5);
+  uint64_t count = 0;
+  uint64_t duration = slash::NowMicros() - start_us;
+  AddAndGetSpopCount(key.ToString(), &count);
+  if (duration >= SPOP_COMPACT_THRESHOLD_DURATION
+    || count >= SPOP_COMPACT_THRESHOLD_COUNT) {
+    *need_compact = true;
+    ResetSpopCount(key.ToString());
+  }
   s = db_->Write(default_write_options_, &batch);
   if (s.ok()) {
       delete meta_info->second;
@@ -943,6 +952,35 @@ Status RedisSets::SPop(const Slice& key, std::string* member, bool* need_compact
       delete meta_value;
   }
   return s;
+}
+
+Status RedisSets::ResetSpopCount(const std::string& key) {
+  slash::MutexLock l(&spop_counts_mutex_);
+  if (spop_counts_store_.map_.find(key) == spop_counts_store_.map_.end()) {
+    return Status::NotFound();
+  }
+  spop_counts_store_.map_.erase(key);
+  spop_counts_store_.list_.remove(key);
+  return Status::OK();
+}
+
+Status RedisSets::AddAndGetSpopCount(const std::string& key, uint64_t* count) {
+  slash::MutexLock l(&spop_counts_mutex_);
+  if (spop_counts_store_.map_.find(key) == spop_counts_store_.map_.end()) {
+    *count = ++spop_counts_store_.map_[key];
+    spop_counts_store_.list_.push_front(key);
+  } else {
+    *count = ++spop_counts_store_.map_[key];
+    spop_counts_store_.list_.remove(key);
+    spop_counts_store_.list_.push_front(key);
+  }
+
+  if (spop_counts_store_.list_.size() > spop_counts_store_.max_size_) {
+    std::string tail = spop_counts_store_.list_.back();
+    spop_counts_store_.map_.erase(tail);
+    spop_counts_store_.list_.pop_back();
+  }
+  return Status::OK();
 }
 
 Status RedisSets::SRandmember(const Slice& key, int32_t count,
