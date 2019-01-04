@@ -80,14 +80,20 @@ Status RedisStrings::AddDelKey(BlackWidow * bw,const string & str) {
   return Status::NotSupported("not supposed yet");
 };
 
-Status RedisStrings::ScanKeyNum(VaildAndInVaildKeyNum* vaild_and_invaild_key_num) {
-  uint64_t vaild = 0;
-  uint64_t invaild = 0;
+Status RedisStrings::ScanKeyNum(KeyInfo* key_info) {
+  uint64_t keys = 0;
+  uint64_t expires = 0;
+  uint64_t ttl_sum = 0;
+  uint64_t invaild_keys = 0;
+
   shannon::ReadOptions iterator_options;
   const shannon::Snapshot* snapshot;
   ScopeSnapshot ss(db_, &snapshot);
   iterator_options.snapshot = snapshot;
   iterator_options.fill_cache = false;
+
+  int64_t curtime;
+  shannon::Env::Default()->GetCurrentTime(&curtime);
 
   // Note: This is a string type and does not need to pass the column family as
   // a parameter, use the default column family
@@ -97,14 +103,21 @@ Status RedisStrings::ScanKeyNum(VaildAndInVaildKeyNum* vaild_and_invaild_key_num
        iter->Next()) {
     ParsedStringsValue parsed_strings_value(iter->value());
     if (parsed_strings_value.IsStale()) {
-      invaild++;
+      invaild_keys++;
     } else {
-      vaild++;
+      keys++;
+      if (!parsed_strings_value.IsPermanentSurvival()) {
+        expires++;
+        ttl_sum += parsed_strings_value.timestamp() - curtime;
+      }
     }
   }
-  vaild_and_invaild_key_num->vaild_key_num = vaild;
-  vaild_and_invaild_key_num->invaild_key_num = invaild;
   delete iter;
+
+  key_info->keys = keys;
+  key_info->expires = expires;
+  key_info->avg_ttl = (expires != 0) ? ttl_sum / expires : 0;
+  key_info->invaild_keys = invaild_keys;
   return Status::OK();
 }
 
