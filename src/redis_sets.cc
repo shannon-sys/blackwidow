@@ -15,9 +15,10 @@
 #include "src/base_filter.h"
 #include "src/scope_record_lock.h"
 #include "src/scope_snapshot.h"
+#include "src/unordered_map_cache_lock.h"
 
 namespace blackwidow {
-std::unordered_map<std::string, std::string*> meta_infos_set_;
+unordered_map_cache_lock meta_infos_set_;
 RedisSets::RedisSets(BlackWidow* const bw, const DataType& type)
     : Redis(bw, type) {
   spop_counts_store_.max_size_ = 1000;

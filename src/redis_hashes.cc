@@ -11,13 +11,14 @@
 #include "src/base_filter.h"
 #include "src/scope_record_lock.h"
 #include "src/scope_snapshot.h"
+#include "src/unordered_map_cache_lock.h"
 
 namespace blackwidow {
 RedisHashes::RedisHashes(BlackWidow* const bw, const DataType& type)
     : Redis(bw, type) {
 }
 
-std::unordered_map<std::string, std::string*> meta_infos_hashes_;
+unordered_map_cache_lock meta_infos_hashes_;
 RedisHashes::~RedisHashes() {
   std::vector<shannon::ColumnFamilyHandle*> tmp_handles = handles_;
   handles_.clear();
