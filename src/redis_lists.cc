@@ -151,7 +151,6 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
            iter_count->Next()) {
           count ++;
       }
-      std::cout<<"count:"<<count<<std::endl;
       for (iter->SeekToFirst();
            iter->Valid();
            iter->Next()) {

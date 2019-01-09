@@ -247,7 +247,6 @@ Status RedisSets::SAdd(const Slice& key,
       }
     } else {
       int32_t cnt = 0;
-      std::string member_value;
       version = parsed_sets_meta_value.version();
       if (parsed_sets_meta_value.timestamp() != 0 ) {
         char str[sizeof(int32_t)+key.size()];
@@ -258,8 +257,7 @@ Status RedisSets::SAdd(const Slice& key,
 
       for (const auto& member : filtered_members) {
         SetsMemberKey sets_member_key(key, version, member);
-        s = db_->Get(default_read_options_, handles_[1],
-                     sets_member_key.Encode(), &member_value);
+        s = db_->KeyExist(default_read_options_, handles_[1], sets_member_key.Encode());
         if (s.ok()) {
         } else if (s.IsNotFound()) {
           cnt++;
@@ -369,7 +367,6 @@ Status RedisSets::SDiff(const std::vector<std::string>& keys,
       && parsed_sets_meta_value.count() != 0) {
       bool found;
       Slice prefix;
-      std::string member_value;
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(keys[0], version, Slice());
       prefix = sets_member_key.Encode();
@@ -384,8 +381,7 @@ Status RedisSets::SDiff(const std::vector<std::string>& keys,
         for (const auto& key_version : vaild_sets) {
           SetsMemberKey sets_member_key(key_version.key,
                   key_version.version, member);
-          s = db_->Get(read_options, handles_[1],
-                  sets_member_key.Encode(), &member_value);
+          s = db_->KeyExist(read_options, handles_[1], sets_member_key.Encode());
           if (s.ok()) {
             found = true;
             break;
@@ -446,7 +442,6 @@ Status RedisSets::SDiffstore(const Slice& destination,
     if (!parsed_sets_meta_value.IsStale()
       && parsed_sets_meta_value.count() != 0) {
       bool found;
-      std::string member_value;
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(keys[0], version, Slice());
       Slice prefix = sets_member_key.Encode();
@@ -461,8 +456,7 @@ Status RedisSets::SDiffstore(const Slice& destination,
         for (const auto& key_version : vaild_sets) {
           SetsMemberKey sets_member_key(key_version.key,
                   key_version.version, member);
-          s = db_->Get(read_options, handles_[1],
-                  sets_member_key.Encode(), &member_value);
+          s = db_->KeyExist(read_options, handles_[1], sets_member_key.Encode());
           if (s.ok()) {
             found = true;
             break;
@@ -560,7 +554,6 @@ Status RedisSets::SInter(const std::vector<std::string>& keys,
       return Status::OK();
     } else {
       bool reliable;
-      std::string member_value;
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(keys[0], version, Slice());
       Slice prefix = sets_member_key.Encode();
@@ -575,8 +568,7 @@ Status RedisSets::SInter(const std::vector<std::string>& keys,
         for (const auto& key_version : vaild_sets) {
           SetsMemberKey sets_member_key(key_version.key,
                   key_version.version, member);
-          s = db_->Get(read_options, handles_[1],
-                  sets_member_key.Encode(), &member_value);
+          s = db_->KeyExist(read_options, handles_[1], sets_member_key.Encode());
           if (s.ok()) {
             continue;
           } else if (s.IsNotFound()) {
@@ -647,7 +639,6 @@ Status RedisSets::SInterstore(const Slice& destination,
         have_invalid_sets = true;
       } else {
         bool reliable;
-        std::string member_value;
         version = parsed_sets_meta_value.version();
         SetsMemberKey sets_member_key(keys[0], version, Slice());
         Slice prefix = sets_member_key.Encode();
@@ -662,8 +653,7 @@ Status RedisSets::SInterstore(const Slice& destination,
           for (const auto& key_version : vaild_sets) {
             SetsMemberKey sets_member_key(key_version.key,
                     key_version.version, member);
-            s = db_->Get(read_options, handles_[1],
-                    sets_member_key.Encode(), &member_value);
+            s = db_->KeyExist(read_options, handles_[1], sets_member_key.Encode());
             if (s.ok()) {
               continue;
             } else if (s.IsNotFound()) {
@@ -743,11 +733,9 @@ Status RedisSets::SIsmember(const Slice& key, const Slice& member,
     } else if (parsed_sets_meta_value.count() == 0) {
       return Status::NotFound();
     } else {
-      std::string member_value;
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(key, version, member);
-      s = db_->Get(read_options, handles_[1],
-              sets_member_key.Encode(), &member_value);
+      s = db_->KeyExist(read_options, handles_[1], sets_member_key.Encode());
       *ret = s.ok() ? 1 : 0;
     }
   } else {
@@ -823,11 +811,9 @@ Status RedisSets::SMove(const Slice& source, const Slice& destination,
     } else if (parsed_sets_meta_value.count() == 0) {
       return Status::NotFound();
     } else {
-      std::string member_value;
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(source, version, member);
-      s = db_->Get(default_read_options_, handles_[1],
-              sets_member_key.Encode(), &member_value);
+      s = db_->KeyExist(default_read_options_, handles_[1], sets_member_key.Encode());
       if (s.ok()) {
         *ret = 1;
         parsed_sets_meta_value.ModifyCount(-1);
@@ -860,11 +846,9 @@ Status RedisSets::SMove(const Slice& source, const Slice& destination,
       SetsMemberKey sets_member_key(destination, version, member);
       batch.Put(handles_[1], sets_member_key.Encode(), Slice("0"));
     } else {
-      std::string member_value;
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(destination, version, member);
-      s = db_->Get(default_read_options_, handles_[1],
-              sets_member_key.Encode(), &member_value);
+      s = db_->KeyExist(default_read_options_, handles_[1], sets_member_key.Encode());
       if (s.IsNotFound()) {
         parsed_sets_meta_value.ModifyCount(1);
         batch.Put(handles_[0], destination, *meta_value2);
@@ -1096,12 +1080,10 @@ Status RedisSets::SRem(const Slice& key,
       return Status::NotFound();
     } else {
       int32_t cnt = 0;
-      std::string member_value;
       version = parsed_sets_meta_value.version();
       for (const auto& member : members) {
         SetsMemberKey sets_member_key(key, version, member);
-        s = db_->Get(default_read_options_, handles_[1],
-                sets_member_key.Encode(), &member_value);
+        s = db_->KeyExist(default_read_options_, handles_[1], sets_member_key.Encode());
         if (s.ok()) {
           cnt++;
           statistic++;

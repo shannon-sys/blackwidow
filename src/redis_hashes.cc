@@ -236,13 +236,11 @@ Status RedisHashes::HDel(const Slice& key,
       delete meta_value;
       return Status::OK();
     } else {
-      std::string data_value;
       version = parsed_hashes_meta_value.version();
 
       for (const auto& field : filtered_fields) {
         HashesDataKey hashes_data_key(key, version, field);
-        s = db_->Get(read_options, handles_[1],
-                hashes_data_key.Encode(), &data_value);
+        s = db_->KeyExist(read_options, handles_[1], hashes_data_key.Encode());
         if (s.ok()) {
           del_cnt++;
           batch.Delete(handles_[1], hashes_data_key.Encode());
@@ -273,8 +271,29 @@ Status RedisHashes::HDel(const Slice& key,
 }
 
 Status RedisHashes::HExists(const Slice& key, const Slice& field) {
-  std::string value;
-  return HGet(key, field, &value);
+  shannon::ReadOptions read_options;
+  int32_t version = 0;
+  const shannon::Snapshot* snapshot;
+  ScopeSnapshot ss(db_, &snapshot);
+  Status s;
+  read_options.snapshot = snapshot;
+  std::unordered_map<std::string, std::string*>::iterator meta_info =
+      meta_infos_hashes_.find(key.data());
+  if (meta_info != meta_infos_hashes_.end()) {
+    ParsedHashesMetaValue parsed_hashes_meta_value(meta_info->second);
+    if (parsed_hashes_meta_value.IsStale()) {
+      return Status::NotFound("Stale");
+    } else if(parsed_hashes_meta_value.count() == 0) {
+      return Status::NotFound();
+    } else {
+      version = parsed_hashes_meta_value.version();
+      HashesDataKey data_key(key, version, field);
+      s = db_->KeyExist(read_options, handles_[1], data_key.Encode());
+    }
+  } else {
+      s = Status::NotFound();
+  }
+  return s;
 }
 
 Status RedisHashes::HGet(const Slice& key, const Slice& field,
@@ -659,12 +678,10 @@ Status RedisHashes::HMSet(const Slice& key,
       }
     } else {
       int32_t count = 0;
-      std::string data_value;
       version = parsed_hashes_meta_value.version();
       for (const auto& fv : filtered_fvs) {
         HashesDataKey hashes_data_key(key, version, fv.field);
-        s = db_->Get(default_read_options_, handles_[1],
-                hashes_data_key.Encode(), &data_value);
+        s = db_->KeyExist(default_read_options_, handles_[1], hashes_data_key.Encode());
         if (s.ok()) {
           statistic++;
           batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
@@ -739,18 +756,12 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
       }
     } else {
       version = parsed_hashes_meta_value.version();
-      std::string data_value;
       HashesDataKey hashes_data_key(key, version, field);
-      s = db_->Get(default_read_options_, handles_[1], hashes_data_key.Encode(), &data_value);
+      s = db_->KeyExist(default_read_options_, handles_[1], hashes_data_key.Encode());
       if (s.ok()) {
         *res = 0;
-        if (data_value == value.ToString()) {
-          delete meta_value;
-          return Status::OK();
-        } else {
-          batch.Put(handles_[1], hashes_data_key.Encode(), value);
-          statistic++;
-        }
+        batch.Put(handles_[1], hashes_data_key.Encode(), value);
+        statistic++;
       } else if (s.IsNotFound()) {
         parsed_hashes_meta_value.ModifyCount(1);
         if (parsed_hashes_meta_value.timestamp() != 0 ) {
@@ -822,9 +833,7 @@ Status RedisHashes::HSetnx(const Slice& key, const Slice& field,
     } else {
       version = parsed_hashes_meta_value.version();
       HashesDataKey hashes_data_key(key, version, field);
-      std::string data_value;
-      s = db_->Get(default_read_options_, handles_[1],
-              hashes_data_key.Encode(), &data_value);
+      s = db_->KeyExist(default_read_options_, handles_[1], hashes_data_key.Encode());
       if (s.ok()) {
         *ret = 0;
       } else if (s.IsNotFound()) {
@@ -855,7 +864,6 @@ Status RedisHashes::HSetnx(const Slice& key, const Slice& field,
           meta_info->second = meta_value;
       } else {
           meta_infos_hashes_.insert(make_pair(key.data(), meta_value));
-          std::cout<<"key:"<<key.ToString()<<std::endl;
       }
   } else {
       delete meta_value;
@@ -1437,7 +1445,7 @@ Status RedisHashes::Expireat(const Slice& key, int32_t timestamp) {
           EncodeFixed32(str,parsed_hashes_meta_value.timestamp());
           memcpy(str + sizeof(int32_t), key.data(),key.size());
           db_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
-        } 
+        }
       } else {
         parsed_hashes_meta_value.InitialMetaValue();
       }
