@@ -1777,7 +1777,7 @@ void RedisLists::ScanDatabase() {
         parsed_lists_meta_value.timestamp() - current_time : -1;
     }
 
-    printf("[key : %-30s] [count : %-10lu] [left index : %-10lu] [right index : %-10lu] [timestamp : %-10d] [version : %d] [survival_time : %d]\n",
+    printf("[key : %-30s] [count : %-10u] [left index : %-10lu] [right index : %-10lu] [timestamp : %-10d] [version : %d] [survival_time : %d]\n",
            meta_iter->key().ToString().c_str(),
            parsed_lists_meta_value.count(),
            reinterpret_cast<uint64_t>(0UL),

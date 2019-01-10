@@ -49,12 +49,6 @@ BlackWidow::~BlackWidow() {
   bg_tasks_should_exit_ = true;
   bg_tasks_cond_var_.Signal();
 
-  shannon::CancelAllBackgroundWork(strings_db_->GetDB(), true);
-  shannon::CancelAllBackgroundWork(hashes_db_->GetDB(), true);
-  shannon::CancelAllBackgroundWork(sets_db_->GetDB(), true);
-  shannon::CancelAllBackgroundWork(lists_db_->GetDB(), true);
-  shannon::CancelAllBackgroundWork(zsets_db_->GetDB(), true);
-
   int ret = 0;
   if ((ret = pthread_join(bg_tasks_thread_id_, NULL)) != 0) {
     fprintf (stderr, "pthread_join failed with bgtask thread error %d\n", ret);

@@ -120,8 +120,8 @@ Status RedisHashes::CompactRange(const shannon::Slice* begin,
   }
   if (type == kData || type == kMetaAndData) {
     db_->CompactRange(default_compact_range_options_, handles_[1], begin, end);
-  return Status::OK();
   }
+  return Status::OK();
 }
 
 Status RedisHashes::GetProperty(const std::string& property, uint64_t* out) {
