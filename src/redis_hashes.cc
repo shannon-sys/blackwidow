@@ -1579,6 +1579,10 @@ void RedisHashes::ScanDatabase() {
 Status RedisHashes::DelTimeout(BlackWidow * bw,std::string * key) {
   Status s = Status::OK();
   shannon::Iterator *iter = db_->NewIterator(shannon::ReadOptions(), handles_[2]);
+  if (nullptr == iter) {
+    *key = "";
+    return s;
+  }
   iter->SeekToFirst();
   if (!iter->Valid()) {
     *key = "";
