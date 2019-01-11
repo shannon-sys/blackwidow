@@ -1371,6 +1371,10 @@ void RedisStrings::ScanDatabase() {
 Status RedisStrings::DelTimeout(BlackWidow * bw,std::string * key) {
   Status s = Status::OK();
   shannon::Iterator *iter = db_->NewIterator(shannon::ReadOptions(), handles_[1]);
+  if (nullptr == iter) {
+    *key = "";
+    return s;
+  }
   iter->SeekToFirst();
   if (!iter->Valid()) {
     *key = "";
