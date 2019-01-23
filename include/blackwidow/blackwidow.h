@@ -1106,6 +1106,7 @@ class BlackWidow {
   Status StopScanKeyNum();
 
   shannon::DB* GetDBByType(const std::string& type);
+  shannon::DB* GetDBByIndex(const int32_t db_index);
   Status AddDelKey(shannon::DB *  db,const string & key,shannon::ColumnFamilyHandle *  handle);
   Status DoDelKey();
   Status RealDel(const DelKey &key);

@@ -1889,4 +1889,23 @@ shannon::DB* BlackWidow::GetDBByType(const std::string& type) {
   }
 }
 
+shannon::DB* BlackWidow::GetDBByIndex(const int32_t db_index) {
+  if (strings_db_->GetDB()->GetIndex() == db_index) {
+    return strings_db_->GetDB();
+  }
+  if (hashes_db_->GetDB()->GetIndex() == db_index) {
+    return hashes_db_->GetDB();
+  }
+  if (lists_db_->GetDB()->GetIndex() == db_index) {
+    return lists_db_->GetDB();
+  }
+  if (sets_db_->GetDB()->GetIndex() == db_index) {
+    return sets_db_->GetDB();
+  }
+  if (zsets_db_->GetDB()->GetIndex() == db_index) {
+    return zsets_db_->GetDB();
+  }
+  return NULL;
+}
+
 }  //  namespace blackwidow
