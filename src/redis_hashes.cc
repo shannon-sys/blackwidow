@@ -1629,4 +1629,37 @@ Status RedisHashes::RealDelTimeout(BlackWidow * bw,std::string * key) {
     return s;
 }
 
+Status RedisHashes::LogAdd(const Slice& key, const Slice& value,
+                          std::string& cf_name) {
+  Status s;
+  bool flag = false;
+  for (auto cfh : handles_) {
+    if (cfh->GetName() == cf_name) {
+      s = db_->Put(default_write_options_, cfh, key, value);
+      flag = true;
+      break;
+    }
+  }
+  if (!flag) {
+    return Status::NotFound();
+  }
+  return s;
+}
+
+Status RedisHashes::LogDelete(const Slice& key, std::string& cf_name) {
+  Status s;
+  bool flag = false;
+  for (auto cfh : handles_) {
+    if (cfh->GetName() == cf_name) {
+      s = db_->Delete(default_write_options_, cfh, key);
+      flag = true;
+      break;
+    }
+  }
+  if (!flag) {
+    return Status::NotFound();
+  }
+  return s;
+}
+
 }  //  namespace blackwidow

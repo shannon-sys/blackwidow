@@ -63,7 +63,12 @@ class Redis {
   virtual Status DoDelKey(){
     return Status::OK();
   };
-  virtual  Status AddDelKey(BlackWidow * bw,const string & str) = 0;
+  virtual Status AddDelKey(BlackWidow * bw,const string & str) = 0;
+
+  virtual Status LogAdd(const Slice& key, const Slice& value,
+                        std::string& cf_name) = 0;
+  virtual Status LogDelete(const Slice& key, std::string& cf_name) = 0;
+
  protected:
   BlackWidow* const bw_;
   DataType type_;

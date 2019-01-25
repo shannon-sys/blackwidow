@@ -1406,4 +1406,14 @@ Status RedisStrings::DelTimeout(BlackWidow * bw,std::string * key) {
   delete iter;
   return s;
 }
+
+Status RedisStrings::LogAdd(const Slice& key, const Slice& value,
+                          std::string& cf_name) {
+  return db_->Put(default_write_options_, key, value);
+}
+
+Status RedisStrings::LogDelete(const Slice& key, std::string& cf_name) {
+  return db_->Delete(default_write_options_, key);
+}
+
 }  //  namespace blackwidow
