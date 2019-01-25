@@ -1408,11 +1408,11 @@ Status RedisStrings::DelTimeout(BlackWidow * bw,std::string * key) {
 }
 
 Status RedisStrings::LogAdd(const Slice& key, const Slice& value,
-                          std::string& cf_name) {
+                          const std::string& cf_name) {
   return db_->Put(default_write_options_, key, value);
 }
 
-Status RedisStrings::LogDelete(const Slice& key, std::string& cf_name) {
+Status RedisStrings::LogDelete(const Slice& key, const std::string& cf_name) {
   return db_->Delete(default_write_options_, key);
 }
 

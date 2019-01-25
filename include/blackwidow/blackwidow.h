@@ -1108,8 +1108,9 @@ class BlackWidow {
   shannon::DB* GetDBByType(const std::string& type);
   shannon::DB* GetDBByIndex(const int32_t db_index);
   Status LogCmdAdd(const Slice& key, const Slice& value,
-                   std::string& db_name, std::string& cf_name);
-  Status LogCmdDelete(const Slice& key, std::string& db_name, std::string& cf_name);
+                   const std::string& db_name, const std::string& cf_name);
+  Status LogCmdDelete(const Slice& key, const std::string& db_name,
+                      const std::string& cf_name);
   Status LogCmdCreateDB(const std::string& db_name);
   Status LogCmdDeleteDB(const std::string& db_name);
   Status AddDelKey(shannon::DB *  db,const string & key,shannon::ColumnFamilyHandle *  handle);

@@ -1861,7 +1861,7 @@ Status RedisLists::RealDelTimeout(BlackWidow * bw,std::string * key) {
 }
 
 Status RedisLists::LogAdd(const Slice& key, const Slice& value,
-                          std::string& cf_name) {
+                          const std::string& cf_name) {
   Status s;
   bool flag = false;
   for (auto cfh : handles_) {
@@ -1877,7 +1877,7 @@ Status RedisLists::LogAdd(const Slice& key, const Slice& value,
   return s;
 }
 
-Status RedisLists::LogDelete(const Slice& key, std::string& cf_name) {
+Status RedisLists::LogDelete(const Slice& key, const std::string& cf_name) {
   Status s;
   bool flag = false;
   for (auto cfh : handles_) {
