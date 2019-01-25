@@ -1909,7 +1909,7 @@ shannon::DB* BlackWidow::GetDBByIndex(const int32_t db_index) {
 }
 
 Status BlackWidow::LogCmdAdd(const Slice& key, const Slice& value,
-        std::string& db_name, std::string& cf_name) {
+        const std::string& db_name, const std::string& cf_name) {
   if (db_name == STRINGS_DB) {
     return strings_db_->LogAdd(key, value, cf_name);
   } else if (db_name == HASHES_DB) {
@@ -1924,8 +1924,8 @@ Status BlackWidow::LogCmdAdd(const Slice& key, const Slice& value,
   return Status::NotFound("db " + db_name + "not exists");
 }
 
-Status BlackWidow::LogCmdDelete(const Slice& key, std::string& db_name,
-        std::string& cf_name) {
+Status BlackWidow::LogCmdDelete(const Slice& key, const std::string& db_name,
+        const std::string& cf_name) {
   if (db_name == STRINGS_DB) {
     return strings_db_->LogDelete(key, cf_name);
   } else if (db_name == HASHES_DB) {

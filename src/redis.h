@@ -66,8 +66,8 @@ class Redis {
   virtual Status AddDelKey(BlackWidow * bw,const string & str) = 0;
 
   virtual Status LogAdd(const Slice& key, const Slice& value,
-                        std::string& cf_name) = 0;
-  virtual Status LogDelete(const Slice& key, std::string& cf_name) = 0;
+                        const std::string& cf_name) = 0;
+  virtual Status LogDelete(const Slice& key, const std::string& cf_name) = 0;
 
  protected:
   BlackWidow* const bw_;
