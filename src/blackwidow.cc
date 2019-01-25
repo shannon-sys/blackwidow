@@ -1908,4 +1908,44 @@ shannon::DB* BlackWidow::GetDBByIndex(const int32_t db_index) {
   return NULL;
 }
 
+Status BlackWidow::LogCmdAdd(const Slice& key, const Slice& value,
+        std::string& db_name, std::string& cf_name) {
+  if (db_name == STRINGS_DB) {
+    return strings_db_->LogAdd(key, value, cf_name);
+  } else if (db_name == HASHES_DB) {
+    return hashes_db_->LogAdd(key, value, cf_name);
+  } else if (db_name == LISTS_DB) {
+    return lists_db_->LogAdd(key, value, cf_name);
+  } else if (db_name == SETS_DB) {
+    return sets_db_->LogAdd(key, value, cf_name);
+  } else if (db_name == ZSETS_DB) {
+    return zsets_db_->LogAdd(key, value, cf_name);
+  }
+  return Status::NotFound("db " + db_name + "not exists");
+}
+
+Status BlackWidow::LogCmdDelete(const Slice& key, std::string& db_name,
+        std::string& cf_name) {
+  if (db_name == STRINGS_DB) {
+    return strings_db_->LogDelete(key, cf_name);
+  } else if (db_name == HASHES_DB) {
+    return hashes_db_->LogDelete(key, cf_name);
+  } else if (db_name == LISTS_DB) {
+    return lists_db_->LogDelete(key, cf_name);
+  } else if (db_name == SETS_DB) {
+    return sets_db_->LogDelete(key, cf_name);
+  } else if (db_name == ZSETS_DB) {
+    return zsets_db_->LogDelete(key, cf_name);
+  }
+  return Status::NotFound("db:" + db_name + "not exists");
+}
+
+Status BlackWidow::LogCmdCreateDB(const std::string& db_name) {
+  return Status::OK();
+}
+
+Status BlackWidow::LogCmdDeleteDB(const std::string& db_name) {
+  return Status::OK();
+}
+
 }  //  namespace blackwidow

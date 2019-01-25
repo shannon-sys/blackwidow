@@ -74,6 +74,9 @@ class RedisLists : public Redis {
     virtual Status Persist(const Slice& key) override;
     virtual Status TTL(const Slice& key, int64_t* timestamp) override;
     virtual Status AddDelKey(BlackWidow *bw,const string & str) override;
+    virtual Status LogAdd(const Slice& key, const Slice& value,
+                          std::string& cf_name) override;
+    virtual Status LogDelete(const Slice& key, std::string &cf_name) override;
     // Iterate all data
     void ScanDatabase();
 
