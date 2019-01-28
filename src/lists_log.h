@@ -4,7 +4,6 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include "src/lists_meta_value_format.h"
 
 namespace blackwidow {
 using Status = shannon::Status;
@@ -39,7 +38,7 @@ class ListsMetaKeyLog {
     private:
         char space_[200];
         char* start_;
-        Slice key_;
+        const Slice key_;
         int32_t version_;
         uint32_t log_index_;
 };

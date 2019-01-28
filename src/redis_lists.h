@@ -83,7 +83,7 @@ class RedisLists : public Redis {
   private:
     std::vector<shannon::ColumnFamilyHandle*> handles_;
     shannon::DB* db_meta_value_log_;
-    int32_t lists_log_count_ = 0;
+    uint32_t lists_log_count_ = 0;
 };
 
 }  //  namespace blackwidow

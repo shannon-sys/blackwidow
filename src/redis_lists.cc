@@ -403,7 +403,7 @@ Status RedisLists::LInsert(const Slice& key,
         parsed_lists_meta_value.ModifyIndex(1);
         parsed_lists_meta_value.ModifyCount(1);
 
-        int32_t log_index = parsed_lists_meta_value.log_index();
+        uint32_t log_index = parsed_lists_meta_value.log_index();
         if (log_index >= lists_log_count_) {
             batch.Put(handles_[0], key, *meta_value);
             parsed_lists_meta_value.ModifyLogToIndex(0);
@@ -485,7 +485,7 @@ Status RedisLists::LPop(const Slice& key, std::string* element) {
         statistic++;
         parsed_lists_meta_value.ModifyCacheMoveLeft(1);
         parsed_lists_meta_value.ModifyCount(-1);
-        int32_t log_index = parsed_lists_meta_value.log_index();
+        uint32_t log_index = parsed_lists_meta_value.log_index();
         if (log_index >= lists_log_count_) {
             batch.Put(handles_[0], key, *meta_value);
             parsed_lists_meta_value.ModifyLogToIndex(0);
@@ -527,7 +527,7 @@ Status RedisLists::LPush(const Slice& key,
 
   uint64_t index = 0;
   int32_t version = 0;
-  int32_t log_index;
+  uint32_t log_index;
   Status s;
   std::string *meta_value;
   bool is_stale = false;
@@ -564,7 +564,7 @@ Status RedisLists::LPush(const Slice& key,
     } else {
         char buf[4];
         int32_t version = parsed_lists_meta_value.version();
-        int32_t log_index = parsed_lists_meta_value.log_index();
+        uint32_t log_index = parsed_lists_meta_value.log_index();
         parsed_lists_meta_value.ModifyLogIndex(1);
         ListsMetaKeyLog lists_meta_key_log(key, version, log_index);
         ListsMetaValueLog lists_meta_value_log(ParsedListsMetaValue::LIST_META_VALUE_LPUSH, values.size());
@@ -636,7 +636,7 @@ Status RedisLists::LPushx(const Slice& key, const Slice& value, uint64_t* len) {
       parsed_lists_meta_value.ModifyCount(1);
       ListsDataKey lists_data_key(key, version, index);
       batch.Put(handles_[1], lists_data_key.Encode(), value);
-      int32_t log_index = parsed_lists_meta_value.log_index();
+      uint32_t log_index = parsed_lists_meta_value.log_index();
       if (log_index >= lists_log_count_) {
           batch.Put(handles_[0], key, *meta_value);
           parsed_lists_meta_value.ModifyLogToIndex(0);
@@ -813,7 +813,7 @@ Status RedisLists::LRem(const Slice& key, int64_t count,
 
         uint32_t count = parsed_lists_meta_value.SortOutCache();
         parsed_lists_meta_value.ModifyCount(-count);
-        int32_t log_index = parsed_lists_meta_value.log_index();
+        uint32_t log_index = parsed_lists_meta_value.log_index();
         if (log_index >= lists_log_count_) {
             batch.Put(handles_[0], key, *meta_value);
             parsed_lists_meta_value.ModifyLogToIndex(0);
@@ -913,7 +913,7 @@ Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
                                      origin_right_index + start + 1;
       uint64_t sublist_right_index = stop >= 0 ? stop :
                                      origin_right_index + stop + 1;
-      int32_t log_index = parsed_lists_meta_value.log_index();
+      uint32_t log_index = parsed_lists_meta_value.log_index();
       if (sublist_left_index == origin_left_index
        && sublist_right_index == origin_right_index) {
           return Status::OK();
@@ -1037,7 +1037,7 @@ Status RedisLists::RPop(const Slice& key, std::string* element) {
         batch.Delete(handles_[1], lists_data_key.Encode());
         statistic++;
         parsed_lists_meta_value.ModifyCount(-1);
-        int32_t log_index = parsed_lists_meta_value.log_index();
+        uint32_t log_index = parsed_lists_meta_value.log_index();
         if (log_index < lists_log_count_) {
             parsed_lists_meta_value.ModifyLogIndex(1);
             ListsMetaKeyLog lists_meta_key_log(key, version, log_index);
@@ -1104,7 +1104,7 @@ Status RedisLists::RPoplpush(const Slice& source,
         parsed_lists_meta_value.ModifyCacheMoveRightForBlock(0, count - 1, 1);
         parsed_lists_meta_value.ModifyCacheIndex(0, right_index);
         statistic++;
-        int32_t log_index = parsed_lists_meta_value.log_index();
+        uint32_t log_index = parsed_lists_meta_value.log_index();
         if (log_index >= lists_log_count_) {
             batch.Put(handles_[0], source, *meta_value);
             parsed_lists_meta_value.ModifyLogToIndex(0);
@@ -1167,7 +1167,7 @@ Status RedisLists::RPoplpush(const Slice& source,
         batch.Delete(handles_[1], lists_data_key.Encode());
         parsed_lists_meta_value.ModifyCount(-1);
         // batch.Put(handles_[0], source, *source_meta_value);
-        int32_t log_index = parsed_lists_meta_value.log_index();
+        uint32_t log_index = parsed_lists_meta_value.log_index();
         if (log_index >= lists_log_count_) {
             batch.Put(handles_[0], source, *source_meta_value);
             parsed_lists_meta_value.ModifyLogToIndex(0);
@@ -1215,7 +1215,7 @@ Status RedisLists::RPoplpush(const Slice& source,
     parsed_lists_meta_value.ModifyCacheIndex(0, target_index);
     parsed_lists_meta_value.ModifyIndex(1);
     parsed_lists_meta_value.ModifyCount(1);
-    int32_t log_index = parsed_lists_meta_value.log_index();
+    uint32_t log_index = parsed_lists_meta_value.log_index();
     if (is_stale || log_index < lists_log_count_) {
         batch.Put(handles_[0], destination, *destination_meta_value);
         parsed_lists_meta_value.ModifyLogToIndex(0);
@@ -1299,7 +1299,7 @@ Status RedisLists::RPush(const Slice& key,
       ListsDataKey lists_data_key(key, version, index);
       batch.Put(handles_[1], lists_data_key.Encode(), value);
     }
-    int32_t log_index = parsed_lists_meta_value.log_index();
+    uint32_t log_index = parsed_lists_meta_value.log_index();
     if (is_stale || log_index >= lists_log_count_) {
         batch.Put(handles_[0], key, *meta_value);
         parsed_lists_meta_value.ModifyLogToIndex(0);
@@ -1374,7 +1374,7 @@ Status RedisLists::RPushx(const Slice& key, const Slice& value, uint64_t* len) {
       parsed_lists_meta_value.ModifyCount(1);
       parsed_lists_meta_value.ModifyCacheIndex(count, index);
       ListsDataKey lists_data_key(key, version, index);
-      int32_t log_index = parsed_lists_meta_value.log_index();
+      uint32_t log_index = parsed_lists_meta_value.log_index();
       if (log_index >= lists_log_count_) {
         batch.Put(handles_[0], key, *meta_value);
         parsed_lists_meta_value.ModifyLogToIndex(0);
@@ -1704,7 +1704,7 @@ Status RedisLists::Persist(const Slice& key) {
     } else {
       int32_t old_timestamp = parsed_lists_meta_value.timestamp();
       uint32_t old_count = parsed_lists_meta_value.count();
-      int32_t old_log_index = parsed_lists_meta_value.log_index();
+      uint32_t old_log_index = parsed_lists_meta_value.log_index();
       uint64_t old_index = parsed_lists_meta_value.index();
       int32_t old_version = parsed_lists_meta_value.version();
       if (old_timestamp == 0) {
