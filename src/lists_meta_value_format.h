@@ -221,9 +221,10 @@ class ParsedListsMetaValue : public ParsedInternalValue {
   explicit ParsedListsMetaValue(std::string* internal_value_str) :
     ParsedInternalValue(internal_value_str), count_(0), index_(0) {
     assert(internal_value_str->size() >= kListsMetaValuePrefixLength);
+    log_index_ = 0;
     if (internal_value_str->size() >= kListsMetaValuePrefixLength) {
-      log_index_ = DecodeFixed32(internal_value_str->data());
       user_value_ = Slice(internal_value_str->data(), sizeof(int32_t));
+      log_index_ = DecodeFixed32(internal_value_str->data());
       version_ = DecodeFixed32(internal_value_str->data() + sizeof(int32_t) * 2);
       timestamp_ = DecodeFixed32(internal_value_str->data() + sizeof(int32_t) * 3);
       index_ = DecodeFixed64(internal_value_str->data() + sizeof(int32_t) * 4);
@@ -235,9 +236,10 @@ class ParsedListsMetaValue : public ParsedInternalValue {
   explicit ParsedListsMetaValue(const Slice& internal_value_slice) :
     ParsedInternalValue(internal_value_slice), count_(0), index_(0) {
     assert(internal_value_slice.size() >= kDefaultValueVirutalPrefixLength + kListsMetaValuePrefixLength);
+    log_index_ = 0;
     if (internal_value_slice.size() >= kListsMetaValuePrefixLength) {
-      log_index_ = DecodeFixed32(internal_value_slice.data());
       user_value_ = Slice(internal_value_slice.data(), sizeof(int32_t));
+      log_index_ = DecodeFixed32(internal_value_slice.data());
       version_ = DecodeFixed32(internal_value_slice.data() + sizeof(int32_t) * 2);
       timestamp_ = DecodeFixed32(internal_value_slice.data() + sizeof(int32_t) * 3);
       index_ = DecodeFixed64(internal_value_slice.data() + sizeof(int32_t) * 4);
@@ -525,16 +527,16 @@ class ParsedListsMetaValue : public ParsedInternalValue {
       EncodeFixed32(const_cast<char *>(value_->data()), log_index_);
   }
 
-  int32_t log_index() {
+  uint32_t log_index() {
       return log_index_;
   }
 
-  void set_log_index(int32_t log_index) {
+  void set_log_index(uint32_t log_index) {
       log_index_ = log_index;
       EncodeFixed32(const_cast<char *>(value_->data()), log_index_);
   }
  private:
-  int32_t log_index_;
+  uint32_t log_index_;
   uint32_t count_;
   uint64_t index_;
 };
