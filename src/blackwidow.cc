@@ -1910,15 +1910,25 @@ shannon::DB* BlackWidow::GetDBByIndex(const int32_t db_index) {
 
 Status BlackWidow::LogCmdAdd(const Slice& key, const Slice& value,
         const std::string& db_name, const std::string& cf_name) {
-  if (db_name == STRINGS_DB) {
+  if (db_name == STRINGS_DB ||
+     (db_name.size() >= STRINGS_DB.size() &&
+      db_name.find(STRINGS_DB) == db_name.size() - STRINGS_DB.size())) {
     return strings_db_->LogAdd(key, value, cf_name);
-  } else if (db_name == HASHES_DB) {
+  } else if (db_name == HASHES_DB ||
+     (db_name.size() >= HASHES_DB.size() &&
+      db_name.find(HASHES_DB) == db_name.size() - HASHES_DB.size())) {
     return hashes_db_->LogAdd(key, value, cf_name);
-  } else if (db_name == LISTS_DB) {
+  } else if (db_name == LISTS_DB ||
+     (db_name.size() >= LISTS_DB.size() &&
+      db_name.find(LISTS_DB) == db_name.size() - LISTS_DB.size())) {
     return lists_db_->LogAdd(key, value, cf_name);
-  } else if (db_name == SETS_DB) {
+  } else if (db_name == SETS_DB ||
+     (db_name.size() >= SETS_DB.size() &&
+      db_name.find(SETS_DB) == db_name.size() - SETS_DB.size())) {
     return sets_db_->LogAdd(key, value, cf_name);
-  } else if (db_name == ZSETS_DB) {
+  } else if (db_name == ZSETS_DB ||
+     (db_name.size() >= ZSETS_DB.size() &&
+      db_name.find(ZSETS_DB) == db_name.size() - ZSETS_DB.size())) {
     return zsets_db_->LogAdd(key, value, cf_name);
   }
   return Status::NotFound("db " + db_name + "not exists");
@@ -1926,15 +1936,25 @@ Status BlackWidow::LogCmdAdd(const Slice& key, const Slice& value,
 
 Status BlackWidow::LogCmdDelete(const Slice& key, const std::string& db_name,
         const std::string& cf_name) {
-  if (db_name == STRINGS_DB) {
+  if (db_name == STRINGS_DB ||
+     (db_name.size() >= STRINGS_DB.size() &&
+      db_name.find(STRINGS_DB) == db_name.size() - STRINGS_DB.size())) {
     return strings_db_->LogDelete(key, cf_name);
-  } else if (db_name == HASHES_DB) {
+  } else if (db_name == HASHES_DB ||
+     (db_name.size() >= HASHES_DB.size() &&
+      db_name.find(HASHES_DB) == db_name.size() - HASHES_DB.size())) {
     return hashes_db_->LogDelete(key, cf_name);
-  } else if (db_name == LISTS_DB) {
+  } else if (db_name == LISTS_DB ||
+     (db_name.size() >= LISTS_DB.size() &&
+      db_name.find(LISTS_DB) == db_name.size() - LISTS_DB.size())) {
     return lists_db_->LogDelete(key, cf_name);
-  } else if (db_name == SETS_DB) {
+  } else if (db_name == SETS_DB ||
+     (db_name.size() >= SETS_DB.size() &&
+      db_name.find(SETS_DB) == db_name.size() - SETS_DB.size())) {
     return sets_db_->LogDelete(key, cf_name);
-  } else if (db_name == ZSETS_DB) {
+  } else if (db_name == ZSETS_DB ||
+     (db_name.size() >= ZSETS_DB.size() &&
+      db_name.find(ZSETS_DB) == db_name.size() - ZSETS_DB.size())) {
     return zsets_db_->LogDelete(key, cf_name);
   }
   return Status::NotFound("db:" + db_name + "not exists");
