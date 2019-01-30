@@ -196,11 +196,13 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
               s = db_->Write(shannon::WriteOptions(), &batch);
               batch.Clear();
           }
-          meta_infos_list_.insert(make_pair(string(slice_key.data()), meta_value));
+          // meta_infos_list_.insert(make_pair(string(slice_key.data()), meta_value));
       }
       for (auto iter : iters) {
           delete iter;
       }
+      meta_infos_list_.SetDb(db_);
+      meta_infos_list_.SetColumnFamilyHandle(handles_[0]);
   }
   return s;
 }
