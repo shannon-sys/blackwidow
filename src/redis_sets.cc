@@ -100,18 +100,8 @@ Status RedisSets::Open(const BlackwidowOptions& bw_options,
       "timeout_cf", shannon::ColumnFamilyOptions()));
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
   if (s.ok()) {
-      shannon::Iterator* iter = db_->NewIterator(shannon::ReadOptions(), handles_[0]);
-      for (iter->SeekToFirst();
-           iter->Valid();
-           iter->Next()) {
-          Slice slice_key = iter->key();
-          Slice slice_value = iter->value();
-          std::string* meta_value = new std::string();
-          meta_value->resize(slice_value.size());
-          memcpy(const_cast<char *>(meta_value->data()), slice_value.data(), slice_value.size());
-          meta_infos_set_.insert(make_pair(slice_key.data(), meta_value));
-      }
-      delete iter;
+    meta_infos_set_.SetDb(db_);
+    meta_infos_set_.SetColumnFamilyHandle(handles_[0]);
   }
   return s;
 }

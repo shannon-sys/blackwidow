@@ -4,6 +4,7 @@
 #include <string>
 #include <unordered_map>
 #include <mutex>
+#include "swift/shannon_db.h"
 
 namespace blackwidow {
 class unordered_map_cache_lock {
@@ -14,7 +15,11 @@ class unordered_map_cache_lock {
     void insert(std::pair<std::string, std::string*> data);
     void erase(std::string key);
     void clear();
+    void SetDb(shannon::DB* db);
+    void SetColumnFamilyHandle(shannon::ColumnFamilyHandle* cfh);
   private:
+    shannon::DB *db_ = NULL;
+    shannon::ColumnFamilyHandle* cfh_ = NULL;
     std::unordered_map<std::string, std::string*> map_;
     std::mutex mutex_;
 };

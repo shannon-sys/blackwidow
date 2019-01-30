@@ -1,10 +1,21 @@
 #include "src/unordered_map_cache_lock.h"
+#include "swift/shannon_db.h"
 
 namespace blackwidow {
   std::unordered_map<std::string, std::string*>::iterator unordered_map_cache_lock::find(std::string key) {
     mutex_.lock();
     std::unordered_map<std::string, std::string*>::iterator iter = map_.find(key);
     mutex_.unlock();
+    if (iter == map_.end()) {
+      std::string *value = new std::string();
+      shannon::Status s = db_->Get(shannon::ReadOptions(), cfh_, key, value);
+      if (s.ok()) {
+        this->insert(make_pair(key, value));
+        mutex_.lock();
+        iter = map_.find(key);
+        mutex_.unlock();
+      }
+    }
     return iter;
   }
 
@@ -39,4 +50,14 @@ namespace blackwidow {
     map_.clear();
     mutex_.unlock();
   }
+
+  void unordered_map_cache_lock::SetDb(shannon::DB* db) {
+    db_ = db;
+  }
+
+  void unordered_map_cache_lock::SetColumnFamilyHandle(
+          shannon::ColumnFamilyHandle* cfh) {
+    cfh_ = cfh;
+  }
+
 };
