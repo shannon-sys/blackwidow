@@ -29,6 +29,7 @@ BlackWidow::BlackWidow() :
   lists_db_(nullptr),
   mutex_factory_(new MutexFactoryImpl),
   delkeys_db_(nullptr),
+  is_slave_(false),
   bg_tasks_cond_var_(&bg_tasks_mutex_),
   current_task_type_(0),
   bg_tasks_should_exit_(false),
@@ -119,7 +120,9 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
     fprintf (stderr, "[FATAL] open zset db failed, %s\n", s.ToString().c_str());
     exit(-1);
   }
-  {
+
+  // if is slave and do not execute the following code
+  if (!is_slave_) {
     shannon::Options ops(bw_options.options);
     ops.create_if_missing = true;
     ops.create_missing_column_families = true;
@@ -131,9 +134,10 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
     shannon::DB *db = strings_db_->GetDB();
     db_path_len_ = db->GetName().length() -strlen("strings");
     CheckCleaning();
-    return Status::OK();
   }
+  return Status::OK();
 }
+
 Status BlackWidow::CheckCleaning() {
       ///遍历每一个key-ColumnFamilyHandle组合  在调用AddDelKey添加相应的key
       shannon::Iterator *iter = delkeys_db_->NewIterator(shannon::ReadOptions());
@@ -161,6 +165,11 @@ Status BlackWidow::CheckCleaning() {
       delete iter;
       return Status::OK();
 }
+
+void BlackWidow::set_is_slave(bool flag) {
+  is_slave_ = flag;
+}
+
 Status BlackWidow::GetStartKey(int64_t cursor, std::string* start_key) {
   cursors_mutex_->Lock();
   if (cursors_store_.map_.end() == cursors_store_.map_.find(cursor)) {
@@ -830,6 +839,9 @@ int64_t BlackWidow::Del(const std::vector<std::string>& keys,
 Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::ColumnFamilyHandle* column_family_handle) {
     if ( 0==key.length() ||  nullptr==column_family_handle) {
         return Status::NotFound("nullptr");
+    }
+    if (!is_slave_) {
+      return Status::Aborted("is slave");
     }
     quelock_.lock();
     delkeys_.push({db,key,column_family_handle});
@@ -1634,43 +1646,49 @@ Status BlackWidow::RunDelTask(){
   Status s = Status::OK() ;
   while (!bg_tasks_should_exit_) {
     bool  flag = true ;
-    try {
-      string key  = "1";
-      if (delkeys_db_ != nullptr){
-        while (strings_db_ != nullptr && "" != key && s.ok()) {
-          s = strings_db_->DelTimeout(this,&key) ;
+    if (!is_slave_) {
+      try {
+        string key = "1";
+        if (delkeys_db_ != nullptr) {
+          while (strings_db_ != nullptr && "" != key && s.ok()) {
+            s = strings_db_->DelTimeout(this, &key);
+          }
+          key = "0";
+          while (hashes_db_ != nullptr && "" != key && s.ok()) {
+            s = hashes_db_->DelTimeout(this, &key);
+          }
+          key = "0";
+          while (sets_db_ != nullptr && "" != key && s.ok()) {
+            s = sets_db_->DelTimeout(this, &key);
+          }
+          key = "0";
+          while (zsets_db_ != nullptr && "" != key && s.ok()) {
+            s = zsets_db_->DelTimeout(this, &key);
+          }
+          key = "0";
+          while (lists_db_ != nullptr && "" != key && s.ok()) {
+            s = lists_db_->DelTimeout(this, &key);
+          }
         }
-        key  = "0";
-        while (hashes_db_ != nullptr && "" != key && s.ok()) {
-          s = hashes_db_->DelTimeout(this,&key) ;
+        s = Status::OK();
+        if (!EmptyQue()) {
+          s = DoDelKey();
+          if (s.ok()) {
+            flag = false;
+          }
         }
-        key  = "0";
-        while (sets_db_ != nullptr && "" != key && s.ok()) {
-          s = sets_db_->DelTimeout(this,&key) ;
-        }
-        key  = "0";
-        while (zsets_db_ != nullptr && "" != key && s.ok()) {
-          s = zsets_db_->DelTimeout(this,&key) ;
-        }
-        key  = "0";
-        while (lists_db_ != nullptr && "" != key && s.ok()) {
-          s = lists_db_->DelTimeout(this,&key) ;
-        }
+      } catch (std::runtime_error e) {
+        std::cout<<e.what()<<std::endl;
       }
-      s = Status::OK() ;
-      if ( !EmptyQue()){
-        s= DoDelKey();
-        if (s.ok())flag =false;
+      if (bg_tasks_should_exit_ ) {
+        return Status::Incomplete("bgtask return with bg_tasks_should_exit_ true");
       }
-    } catch (std::runtime_error e) {
-      std::cout<<e.what()<<std::endl;
+      if (!s.ok())
+        cout<<"do del  keys error "<<s.getState()<<endl;
     }
-    if (bg_tasks_should_exit_ ) {
-      return Status::Incomplete("bgtask return with bg_tasks_should_exit_ true");
+    if (flag) {
+      sleep(1);
     }
-    if (!s.ok())
-      cout << "do del  keys error "<<s.getState()<<endl;
-    if (flag)  sleep(1);
   }
  return Status::OK();
 };
