@@ -1869,6 +1869,24 @@ Status RedisLists::LogAdd(const Slice& key, const Slice& value,
   for (auto cfh : handles_) {
     if (cfh->GetName() == cf_name) {
       s = db_->Put(default_write_options_, cfh, key, value);
+      if (!s.ok()) {
+        return s;
+      }
+      if (cf_name == "log_cf") {
+        unordered_map<std::string, std::string*>::iterator iter =
+            meta_infos_list_.find(key.ToString(), false);
+        if (iter != meta_infos_list_.end()) {
+          ParsedListsMetaValue parsed_lists_meta_value(iter->second);
+          parsed_lists_meta_value.ExecuteCmd(value.data());
+        }
+      } else if(cf_name == "default") {
+        unordered_map<std::string, std::string*>::iterator iter =
+            meta_infos_list_.find(key.ToString());
+        if (iter != meta_infos_list_.end()) {
+          delete iter->second;
+          meta_infos_list_.erase(key.ToString());
+        }
+      }
       flag = true;
       break;
     }
@@ -1885,6 +1903,9 @@ Status RedisLists::LogDelete(const Slice& key, const std::string& cf_name) {
   for (auto cfh : handles_) {
     if (cfh->GetName() == cf_name) {
       s = db_->Delete(default_write_options_, cfh, key);
+      if (!s.ok()) {
+        return s;
+      }
       flag = true;
       break;
     }

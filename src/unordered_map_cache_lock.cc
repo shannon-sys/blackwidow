@@ -2,11 +2,12 @@
 #include "swift/shannon_db.h"
 
 namespace blackwidow {
-  std::unordered_map<std::string, std::string*>::iterator unordered_map_cache_lock::find(std::string key) {
+  std::unordered_map<std::string, std::string*>::iterator
+      unordered_map_cache_lock::find(std::string key, bool not_found_insert) {
     mutex_.lock();
     std::unordered_map<std::string, std::string*>::iterator iter = map_.find(key);
     mutex_.unlock();
-    if (iter == map_.end()) {
+    if (not_found_insert && iter == map_.end()) {
       std::string *value = new std::string();
       shannon::Status s = db_->Get(shannon::ReadOptions(), cfh_, key, value);
       if (s.ok()) {

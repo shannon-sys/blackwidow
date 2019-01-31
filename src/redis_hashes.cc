@@ -1626,6 +1626,17 @@ Status RedisHashes::LogAdd(const Slice& key, const Slice& value,
   for (auto cfh : handles_) {
     if (cfh->GetName() == cf_name) {
       s = db_->Put(default_write_options_, cfh, key, value);
+      if (!s.ok()) {
+        return s;
+      }
+      if (cf_name == "default") {
+        unordered_map<std::string, std::string*>::iterator iter =
+            meta_infos_hashes_.find(key.ToString());
+        if (iter != meta_infos_hashes_.end()) {
+          delete iter->second;
+          meta_infos_hashes_.erase(key.ToString());
+        }
+      }
       flag = true;
       break;
     }

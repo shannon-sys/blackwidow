@@ -9,7 +9,8 @@
 namespace blackwidow {
 class unordered_map_cache_lock {
   public:
-    std::unordered_map<std::string, std::string*>::iterator find(std::string);
+    std::unordered_map<std::string, std::string*>::iterator find(std::string,
+            bool not_found_insert = true);
     std::unordered_map<std::string, std::string*>::iterator begin();
     std::unordered_map<std::string, std::string*>::iterator end();
     void insert(std::pair<std::string, std::string*> data);
