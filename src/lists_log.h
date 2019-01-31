@@ -71,6 +71,38 @@ class ListsMetaValueLog {
         int32_t count_;
         char space_[10];
 };
+
+class ParsedMetaKeyLog {
+  public:
+    ParsedMetaKeyLog(std::string& internal_key) {
+      assert(internal_key.size() >= sizeof(int32_t) + sizeof(uint32_t));
+      int offset = 0;
+      key_ = Slice(internal_key.data(), internal_key.size() - sizeof(int32_t) -
+              sizeof(uint32_t));
+      offset += internal_key.size() - sizeof(int32_t) - sizeof(uint32_t);
+      version_ = DecodeFixed32(internal_key.data() + offset);
+      offset += sizeof(int32_t);
+      log_index_ = DecodeFixed32(internal_key.data() + offset);
+    }
+
+    Slice key() {
+      return key_;
+    }
+
+    int32_t version() {
+      return version_;
+    }
+
+    uint32_t log_index() {
+      return log_index_;
+    }
+
+  private:
+    Slice key_;
+    int32_t version_;
+    uint32_t log_index_;
+};
+
 };
 
 #endif
