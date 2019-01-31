@@ -1119,6 +1119,7 @@ class BlackWidow {
   bool EmptyQue();
   std::string Encoding(const Slice& key);
   Status CheckCleaning();
+  void set_is_slave(bool flag);
  private:
   RedisStrings* strings_db_ ;
   RedisHashes* hashes_db_;
@@ -1129,7 +1130,8 @@ class BlackWidow {
   std::queue<DelKey> delkeys_;
   std::mutex quelock_;
   MutexFactory* mutex_factory_;
-  shannon::DB * delkeys_db_;
+  shannon::DB* delkeys_db_;
+  bool is_slave_;
 
   LRU<int64_t, std::string> cursors_store_;
   std::shared_ptr<Mutex> cursors_mutex_;
