@@ -96,6 +96,7 @@ Status RedisHashes::Open(const BlackwidowOptions& bw_options,
       "timeout_cf", shannon::ColumnFamilyOptions()));
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
   if (s.ok()) {
+    vdb_ = new VDB(db_);
     meta_infos_hashes_.SetDb(db_);
     meta_infos_hashes_.SetColumnFamilyHandle(handles_[0]);
   }
@@ -203,7 +204,7 @@ Status RedisHashes::HDel(const Slice& key,
     }
   }
 
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot;
 
@@ -250,7 +251,7 @@ Status RedisHashes::HDel(const Slice& key,
     *ret = 0;
     return Status::OK();
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       delete meta_info->second;
@@ -352,7 +353,7 @@ Status RedisHashes::HGetall(const Slice& key,
 Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
                             int64_t* ret) {
   *ret = 0;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
   int32_t version = 0;
@@ -423,7 +424,7 @@ Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
     batch.Put(handles_[1], hashes_data_key.Encode(), buf);
     *ret = value;
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
     if (meta_info != meta_infos_hashes_.end()) {
@@ -441,7 +442,7 @@ Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
 Status RedisHashes::HIncrbyfloat(const Slice& key, const Slice& field,
                                  const Slice& by, std::string* new_value) {
   new_value->clear();
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
   int32_t version = 0;
@@ -511,7 +512,7 @@ Status RedisHashes::HIncrbyfloat(const Slice& key, const Slice& field,
     LongDoubleToStr(long_double_by, new_value);
     batch.Put(handles_[1], hashes_data_key.Encode(), *new_value);
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_hashes_.end()) {
@@ -644,7 +645,7 @@ Status RedisHashes::HMSet(const Slice& key,
     }
   }
 
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
   int32_t version = 0;
@@ -699,7 +700,7 @@ Status RedisHashes::HMSet(const Slice& key,
       batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
     }
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
     if (meta_info != meta_infos_hashes_.end()) {
@@ -716,7 +717,7 @@ Status RedisHashes::HMSet(const Slice& key,
 
 Status RedisHashes::HSet(const Slice& key, const Slice& field,
                          const Slice& value, int32_t* res) {
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
   int32_t version = 0;
@@ -783,7 +784,7 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
     *res = 1;
   }
 
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_hashes_.end()) {
@@ -800,7 +801,7 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
 
 Status RedisHashes::HSetnx(const Slice& key, const Slice& field,
                            const Slice& value, int32_t* ret) {
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
   int32_t version = 0;
@@ -848,7 +849,7 @@ Status RedisHashes::HSetnx(const Slice& key, const Slice& field,
     batch.Put(handles_[1], hashes_data_key.Encode(), value);
     *ret = 1;
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   if (s.ok()) {
       if (meta_info != meta_infos_hashes_.end()) {
           delete meta_info->second;
@@ -1302,17 +1303,17 @@ Status RedisHashes::Expire(const Slice& key, int32_t ttl) {
 
     if (ttl > 0) {
       parsed_hashes_meta_value.SetRelativeTimestamp(ttl);
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
       if (parsed_hashes_meta_value.timestamp() != 0 ) {
         char str[sizeof(int32_t)+key.size() +1];
         str[sizeof(int32_t)+key.size() ] = '\0';
         EncodeFixed32(str,parsed_hashes_meta_value.timestamp());
         memcpy(str + sizeof(int32_t) , key.data(),key.size());
-       db_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
+       vdb_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
       }
     } else {
       parsed_hashes_meta_value.InitialMetaValue();
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
     }
     if (s.ok()) {
         delete meta_info->second;
@@ -1347,7 +1348,7 @@ Status RedisHashes::Del(const Slice& key) {
     } else {
       uint32_t statistic = parsed_hashes_meta_value.count();
       parsed_hashes_meta_value.InitialMetaValue();
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
     if (s.ok()) {
@@ -1435,12 +1436,12 @@ Status RedisHashes::Expireat(const Slice& key, int32_t timestamp) {
           str[sizeof(int32_t)+key.size() ] = '\0';
           EncodeFixed32(str,parsed_hashes_meta_value.timestamp());
           memcpy(str + sizeof(int32_t), key.data(),key.size());
-          db_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
+          vdb_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
         }
       } else {
         parsed_hashes_meta_value.InitialMetaValue();
       }
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
     }
     if (s.ok()) {
         delete meta_info->second;
@@ -1477,7 +1478,7 @@ Status RedisHashes::Persist(const Slice& key) {
         return Status::NotFound("Not have an associated timeout");
       } else {
         parsed_hashes_meta_value.set_timestamp(0);
-        s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+        s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
         if (s.ok()) {
             delete meta_info->second;
             meta_info->second = meta_value;
@@ -1589,7 +1590,7 @@ Status RedisHashes::DelTimeout(BlackWidow * bw,std::string * key) {
    memcpy(const_cast<char *>(key->data()),slice_key.data()+sizeof(int32_t),iter->key().size()-sizeof(int32_t));
     s = RealDelTimeout(bw,key);
     if (s.ok()){
-      s = db_->Delete(shannon::WriteOptions(), handles_[2], iter->key());
+      s = vdb_->Delete(shannon::WriteOptions(), handles_[2], iter->key());
     }
   }
   else  *key = "";
@@ -1611,7 +1612,7 @@ Status RedisHashes::RealDelTimeout(BlackWidow * bw,std::string * key) {
       if (parsed_hashes_meta_value.timestamp() < static_cast<int32_t>(unix_time))
       {
         AddDelKey(bw, *key);
-        s = db_->Delete(shannon::WriteOptions(), handles_[0], *key);
+        s = vdb_->Delete(shannon::WriteOptions(), handles_[0], *key);
         delete meta_info->second;
         meta_infos_hashes_.erase(*key);
       }
@@ -1625,7 +1626,7 @@ Status RedisHashes::LogAdd(const Slice& key, const Slice& value,
   bool flag = false;
   for (auto cfh : handles_) {
     if (cfh->GetName() == cf_name) {
-      s = db_->Put(default_write_options_, cfh, key, value);
+      s = vdb_->Put(default_write_options_, cfh, key, value);
       if (!s.ok()) {
         return s;
       }
@@ -1652,7 +1653,7 @@ Status RedisHashes::LogDelete(const Slice& key, const std::string& cf_name) {
   bool flag = false;
   for (auto cfh : handles_) {
     if (cfh->GetName() == cf_name) {
-      s = db_->Delete(default_write_options_, cfh, key);
+      s = vdb_->Delete(default_write_options_, cfh, key);
       flag = true;
       break;
     }

@@ -100,6 +100,7 @@ Status RedisSets::Open(const BlackwidowOptions& bw_options,
       "timeout_cf", shannon::ColumnFamilyOptions()));
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
   if (s.ok()) {
+    vdb_ = new VDB(db_);
     meta_infos_set_.SetDb(db_);
     meta_infos_set_.SetColumnFamilyHandle(handles_[0]);
   }
@@ -207,7 +208,7 @@ Status RedisSets::SAdd(const Slice& key,
     }
   }
 
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
   int32_t version = 0;
   Status s;
@@ -280,7 +281,7 @@ Status RedisSets::SAdd(const Slice& key,
     *ret = filtered_members.size();
     ParsedSetsMetaValue parsed_sets_meta_value(meta_value);
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   if (s.ok()) {
     if (meta_info != meta_infos_set_.end()) {
         delete meta_info->second;
@@ -400,7 +401,7 @@ Status RedisSets::SDiffstore(const Slice& destination,
     return Status::Corruption("SDiffsotre invalid parameter, no keys");
   }
 
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot;
 
@@ -490,7 +491,7 @@ Status RedisSets::SDiffstore(const Slice& destination,
     batch.Put(handles_[1], sets_member_key.Encode(), Slice("0"));
   }
   *ret = members.size();
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(destination.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_set_.end()) {
@@ -589,7 +590,7 @@ Status RedisSets::SInterstore(const Slice& destination,
     return Status::Corruption("SInterstore invalid parameter, no keys");
   }
 
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot;
 
@@ -690,7 +691,7 @@ Status RedisSets::SInterstore(const Slice& destination,
     batch.Put(handles_[1], sets_member_key.Encode(), Slice("0"));
   }
   *ret = members.size();
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(destination.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_set_.end()) {
@@ -775,7 +776,7 @@ Status RedisSets::SMembers(const Slice& key,
 Status RedisSets::SMove(const Slice& source, const Slice& destination,
                         const Slice& member, int32_t* ret) {
   *ret = 0;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   shannon::ReadOptions read_options;
 
   std::string *meta_value1, *meta_value2;
@@ -858,7 +859,7 @@ Status RedisSets::SMove(const Slice& source, const Slice& destination,
     SetsMemberKey sets_member_key(destination, version, member);
     batch.Put(handles_[1], sets_member_key.Encode(), Slice("0"));
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(source.ToString(), 1);
   if (s.ok()) {
       delete meta_info1->second;
@@ -881,7 +882,7 @@ Status RedisSets::SPop(const Slice& key, std::string* member, bool* need_compact
   std::default_random_engine engine;
 
   std::string *meta_value;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
   std::unordered_map<std::string, std::string*>::iterator meta_info;
   Status s;
@@ -935,7 +936,7 @@ Status RedisSets::SPop(const Slice& key, std::string* member, bool* need_compact
     *need_compact = true;
     ResetSpopCount(key.ToString());
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   if (s.ok()) {
       delete meta_info->second;
       meta_info->second = meta_value;
@@ -984,7 +985,7 @@ Status RedisSets::SRandmember(const Slice& key, int32_t count,
   int32_t last_seed = time(NULL);
   std::default_random_engine engine;
 
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
   std::vector<int32_t> targets;
   std::unordered_set<int32_t> unique;
@@ -1051,7 +1052,7 @@ Status RedisSets::SRem(const Slice& key,
                        const std::vector<std::string>& members,
                        int32_t* ret) {
   *ret = 0;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
   int32_t version = 0;
@@ -1092,7 +1093,7 @@ Status RedisSets::SRem(const Slice& key,
     *ret = 0;
     return Status::NotFound();
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   if (s.ok()) {
       delete meta_info->second;
@@ -1160,7 +1161,7 @@ Status RedisSets::SUnionstore(const Slice& destination,
     return Status::Corruption("SUnionstore invalid parameter, no keys");
   }
 
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot;
 
@@ -1230,7 +1231,7 @@ Status RedisSets::SUnionstore(const Slice& destination,
     batch.Put(handles_[1], sets_member_key.Encode(), Slice("0"));
   }
   *ret = members.size();
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(destination.ToString(), statistic);
   if (s.ok()) {
       if (meta_info != meta_infos_set_.end()) {
@@ -1459,17 +1460,17 @@ Status RedisSets::Expire(const Slice& key, int32_t ttl) {
     }
     if (ttl > 0) {
       parsed_sets_meta_value.SetRelativeTimestamp(ttl);
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
       if (parsed_sets_meta_value.timestamp() != 0 ) {
         char str[sizeof(int32_t)+key.size() +1];
         str[sizeof(int32_t)+key.size() ] = '\0';
         EncodeFixed32(str,parsed_sets_meta_value.timestamp());
         memcpy(str + sizeof(int32_t) , key.data(),key.size());
-        db_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
+        vdb_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
       }
     } else {
       parsed_sets_meta_value.InitialMetaValue();
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
     }
     if (meta_info != meta_infos_set_.end()) {
         delete meta_info->second;
@@ -1502,7 +1503,7 @@ Status RedisSets::Del(const Slice& key) {
     } else {
       uint32_t statistic = parsed_sets_meta_value.count();
       parsed_sets_meta_value.InitialMetaValue();
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
     if (s.ok()) {
@@ -1586,11 +1587,11 @@ Status RedisSets::Expireat(const Slice& key, int32_t timestamp) {
         str[sizeof(int32_t)+key.size() ] = '\0';
         EncodeFixed32(str,parsed_sets_meta_value.timestamp());
         memcpy(str + sizeof(int32_t) , key.data(),key.size());
-        db_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
+        vdb_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
       } else {
         parsed_sets_meta_value.InitialMetaValue();
       }
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
     }
     if (s.ok()) {
         delete meta_info->second;
@@ -1627,7 +1628,7 @@ Status RedisSets::Persist(const Slice& key) {
         return Status::NotFound("Not have an associated timeout");
       } else {
         parsed_sets_meta_value.set_timestamp(0);
-        s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+        s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
       }
     }
     if (s.ok()) {
@@ -1737,7 +1738,7 @@ Status RedisSets::DelTimeout(BlackWidow * bw,std::string * key) {
   memcpy(const_cast<char *>(key->data()),slice_key.data()+sizeof(int32_t),iter->key().size()-sizeof(int32_t));
     s = RealDelTimeout(bw,key);
     if (s.ok()){
-      s = db_->Delete(shannon::WriteOptions(), handles_[2], iter->key());
+      s = vdb_->Delete(shannon::WriteOptions(), handles_[2], iter->key());
     }
   }
   else  *key = "";
@@ -1760,7 +1761,7 @@ Status RedisSets::RealDelTimeout(BlackWidow * bw,std::string * key) {
       if (parsed_set_meta_value.timestamp() < static_cast<int32_t>(unix_time))
       {
         AddDelKey(bw, *key);
-        s = db_->Delete(shannon::WriteOptions(), handles_[0], *key);
+        s = vdb_->Delete(shannon::WriteOptions(), handles_[0], *key);
         delete meta_info->second;
         meta_infos_set_.erase(*key);
       }
@@ -1776,7 +1777,7 @@ Status RedisSets::LogAdd(const Slice& key, const Slice& value,
   bool flag = false;
   for (auto cfh : handles_) {
     if (cfh->GetName() == cf_name) {
-      s = db_->Put(default_write_options_, cfh, key, value);
+      s = vdb_->Put(default_write_options_, cfh, key, value);
       if (!s.ok()) {
         return s;
       }
@@ -1803,7 +1804,7 @@ Status RedisSets::LogDelete(const Slice& key, const std::string& cf_name) {
   bool flag = false;
   for (auto cfh : handles_) {
     if (cfh->GetName() == cf_name) {
-      s = db_->Delete(default_write_options_, cfh, key);
+      s = vdb_->Delete(default_write_options_, cfh, key);
       flag = true;
       break;
     }
