@@ -1113,6 +1113,9 @@ class BlackWidow {
                       const std::string& cf_name);
   Status LogCmdCreateDB(const std::string& db_name);
   Status LogCmdDeleteDB(const std::string& db_name);
+  int64_t GetWriteSize();
+  void ResetWriteSize();
+  int64_t GetAndResetWriteSize();
   Status AddDelKey(shannon::DB *  db,const string & key,shannon::ColumnFamilyHandle *  handle);
   Status DoDelKey();
   Status RealDel(const DelKey &key);

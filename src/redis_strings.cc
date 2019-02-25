@@ -61,6 +61,9 @@ Status RedisStrings::Open(const BlackwidowOptions& bw_options,
   column_families.push_back(shannon::ColumnFamilyDescriptor(
       "timeout_cf", shannon::ColumnFamilyOptions()));
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
+  if (s.ok()) {
+    vdb_ = new VDB(db_);
+  }
   return  s;
 }
 
@@ -159,7 +162,7 @@ Status RedisStrings::Append(const Slice& key, const Slice& value,
     if (parsed_strings_value.IsStale()) {
       *ret = value.size();
       StringsValue strings_value(value);
-      return db_->Put(default_write_options_, key, strings_value.Encode());
+      return vdb_->Put(default_write_options_, key, strings_value.Encode());
     } else {
       int32_t timestamp = parsed_strings_value.timestamp();
       std::string old_user_value = parsed_strings_value.value().ToString();
@@ -167,12 +170,12 @@ Status RedisStrings::Append(const Slice& key, const Slice& value,
       StringsValue strings_value(new_value);
       strings_value.set_timestamp(timestamp);
       *ret = new_value.size();
-      return db_->Put(default_write_options_, key, strings_value.Encode());
+      return vdb_->Put(default_write_options_, key, strings_value.Encode());
     }
   } else if (s.IsNotFound()) {
     *ret = value.size();
     StringsValue strings_value(value);
-    return db_->Put(default_write_options_, key, strings_value.Encode());
+    return vdb_->Put(default_write_options_, key, strings_value.Encode());
   }
   return s;
 }
@@ -335,7 +338,7 @@ Status RedisStrings::BitOp(BitOpType op,
   StringsValue strings_value(Slice(dest_value.c_str(),
                                    static_cast<size_t>(max_len)));
   ScopeRecordLock l(lock_mgr_, dest_key);
-  return db_->Put(default_write_options_, dest_key, strings_value.Encode());
+  return vdb_->Put(default_write_options_, dest_key, strings_value.Encode());
 }
 
 Status RedisStrings::Decrby(const Slice& key, int64_t value, int64_t* ret) {
@@ -349,7 +352,7 @@ Status RedisStrings::Decrby(const Slice& key, int64_t value, int64_t* ret) {
       *ret = -value;
       new_value = std::to_string(*ret);
       StringsValue strings_value(new_value);
-      return db_->Put(default_write_options_, key, strings_value.Encode());
+      return vdb_->Put(default_write_options_, key, strings_value.Encode());
     } else {
       int32_t timestamp = parsed_strings_value.timestamp();
       std::string old_user_value = parsed_strings_value.value().ToString();
@@ -366,13 +369,13 @@ Status RedisStrings::Decrby(const Slice& key, int64_t value, int64_t* ret) {
       new_value = std::to_string(*ret);
       StringsValue strings_value(new_value);
       strings_value.set_timestamp(timestamp);
-      return db_->Put(default_write_options_, key, strings_value.Encode());
+      return vdb_->Put(default_write_options_, key, strings_value.Encode());
     }
   } else if (s.IsNotFound()) {
     *ret = -value;
     new_value = std::to_string(*ret);
     StringsValue strings_value(new_value);
-    return db_->Put(default_write_options_, key, strings_value.Encode());
+    return vdb_->Put(default_write_options_, key, strings_value.Encode());
   } else {
     return s;
   }
@@ -473,7 +476,7 @@ Status RedisStrings::GetSet(const Slice& key, const Slice& value,
     return s;
   }
   StringsValue strings_value(value);
-  return db_->Put(default_write_options_, key, strings_value.Encode());
+  return vdb_->Put(default_write_options_, key, strings_value.Encode());
 }
 
 Status RedisStrings::Incrby(const Slice& key, int64_t value, int64_t* ret) {
@@ -488,7 +491,7 @@ Status RedisStrings::Incrby(const Slice& key, int64_t value, int64_t* ret) {
       char buf[32];
       Int64ToStr(buf, 32, value);
       StringsValue strings_value(buf);
-      return db_->Put(default_write_options_, key, strings_value.Encode());
+      return vdb_->Put(default_write_options_, key, strings_value.Encode());
     } else {
       int32_t timestamp = parsed_strings_value.timestamp();
       std::string old_user_value = parsed_strings_value.value().ToString();
@@ -505,14 +508,14 @@ Status RedisStrings::Incrby(const Slice& key, int64_t value, int64_t* ret) {
       new_value = std::to_string(*ret);
       StringsValue strings_value(new_value);
       strings_value.set_timestamp(timestamp);
-      return db_->Put(default_write_options_, key, strings_value.Encode());
+      return vdb_->Put(default_write_options_, key, strings_value.Encode());
     }
   } else if (s.IsNotFound()) {
     *ret = value;
     char buf[32];
     Int64ToStr(buf, 32, value);
     StringsValue strings_value(buf);
-    return db_->Put(default_write_options_, key, strings_value.Encode());
+    return vdb_->Put(default_write_options_, key, strings_value.Encode());
   } else {
     return s;
   }
@@ -533,7 +536,7 @@ Status RedisStrings::Incrbyfloat(const Slice& key, const Slice& value,
       LongDoubleToStr(long_double_by, &new_value);
       *ret = new_value;
       StringsValue strings_value(new_value);
-      return db_->Put(default_write_options_, key, strings_value.Encode());
+      return vdb_->Put(default_write_options_, key, strings_value.Encode());
     } else {
       int32_t timestamp = parsed_strings_value.timestamp();
       std::string old_user_value = parsed_strings_value.value().ToString();
@@ -549,13 +552,13 @@ Status RedisStrings::Incrbyfloat(const Slice& key, const Slice& value,
       *ret = new_value;
       StringsValue strings_value(new_value);
       strings_value.set_timestamp(timestamp);
-      return db_->Put(default_write_options_, key, strings_value.Encode());
+      return vdb_->Put(default_write_options_, key, strings_value.Encode());
     }
   } else if (s.IsNotFound()) {
     LongDoubleToStr(long_double_by, &new_value);
     *ret = new_value;
     StringsValue strings_value(new_value);
-    return db_->Put(default_write_options_, key, strings_value.Encode());
+    return vdb_->Put(default_write_options_, key, strings_value.Encode());
   } else {
     return s;
   }
@@ -598,12 +601,12 @@ Status RedisStrings::MSet(const std::vector<KeyValue>& kvs) {
   }
 
   MultiScopeRecordLock ml(lock_mgr_, keys);
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   for (const auto& kv : kvs) {
     StringsValue strings_value(kv.value);
     batch.Put(kv.key, strings_value.Encode());
   }
-  return db_->Write(default_write_options_, &batch);
+  return vdb_->Write(default_write_options_, &batch);
 }
 
 Status RedisStrings::MSetnx(const std::vector<KeyValue>& kvs,
@@ -640,9 +643,9 @@ Status RedisStrings::Set(const Slice& key, const Slice& value, const int32_t ttl
     str[sizeof(int32_t)+key.size() ] = '\0';
     EncodeFixed32(str,strings_value.timestamp());
     memcpy(str + sizeof(int32_t) , key.data(),key.size());
-    db_->Put(default_write_options_,handles_[1],{str,sizeof(int32_t)+key.size()}, "1" );
+    vdb_->Put(default_write_options_,handles_[1],{str,sizeof(int32_t)+key.size()}, "1" );
   }
-  return db_->Put(default_write_options_, key, strings_value.Encode());
+  return vdb_->Put(default_write_options_, key, strings_value.Encode());
 }
 
 Status RedisStrings::Setxx(const Slice& key, const Slice& value, int32_t* ret, const int32_t ttl) {
@@ -668,7 +671,7 @@ Status RedisStrings::Setxx(const Slice& key, const Slice& value, int32_t* ret, c
     if (ttl > 0) {
       strings_value.SetRelativeTimestamp(ttl);
     }
-    return db_->Put(default_write_options_, key, strings_value.Encode());
+    return vdb_->Put(default_write_options_, key, strings_value.Encode());
   }
 }
 
@@ -712,7 +715,7 @@ Status RedisStrings::SetBit(const Slice& key, int64_t offset,
       data_value.append(1, byte_val);
     }
     StringsValue strings_value(data_value);
-    return  db_->Put(shannon::WriteOptions(), key, strings_value.Encode());
+    return  vdb_->Put(shannon::WriteOptions(), key, strings_value.Encode());
   } else {
     return s;
   }
@@ -725,7 +728,7 @@ Status RedisStrings::Setex(const Slice& key, const Slice& value, int32_t ttl) {
   StringsValue strings_value(value);
   strings_value.SetRelativeTimestamp(ttl);
   ScopeRecordLock l(lock_mgr_, key);
-  return db_->Put(default_write_options_, key, strings_value.Encode());
+  return vdb_->Put(default_write_options_, key, strings_value.Encode());
 }
 
 Status RedisStrings::Setnx(const Slice& key, const Slice& value, int32_t* ret, const int32_t ttl) {
@@ -740,7 +743,7 @@ Status RedisStrings::Setnx(const Slice& key, const Slice& value, int32_t* ret, c
       if (ttl > 0) {
         strings_value.SetRelativeTimestamp(ttl);
       }
-      s = db_->Put(default_write_options_, key, strings_value.Encode());
+      s = vdb_->Put(default_write_options_, key, strings_value.Encode());
       if (s.ok()) {
         *ret = 1;
       }
@@ -750,7 +753,7 @@ Status RedisStrings::Setnx(const Slice& key, const Slice& value, int32_t* ret, c
     if (ttl > 0) {
       strings_value.SetRelativeTimestamp(ttl);
     }
-    s = db_->Put(default_write_options_, key, strings_value.Encode());
+    s = vdb_->Put(default_write_options_, key, strings_value.Encode());
     if (s.ok()) {
       *ret = 1;
     }
@@ -774,7 +777,7 @@ Status RedisStrings::Setvx(const Slice& key, const Slice& value,
         if (ttl > 0) {
           strings_value.SetRelativeTimestamp(ttl);
         }
-        s = db_->Put(default_write_options_, key, strings_value.Encode());
+        s = vdb_->Put(default_write_options_, key, strings_value.Encode());
         if (!s.ok()) {
           return s;
         }
@@ -804,7 +807,7 @@ Status RedisStrings::Delvx(const Slice& key, const Slice& value, int32_t* ret) {
     } else {
       if (!value.compare(parsed_strings_value.value())) {
         *ret = 1;
-        return db_->Delete(default_write_options_, key);
+        return vdb_->Delete(default_write_options_, key);
       } else {
         *ret = -1;
       }
@@ -847,13 +850,13 @@ Status RedisStrings::Setrange(const Slice& key, int64_t start_offset,
     }
     *ret = new_value.length();
     StringsValue strings_value(new_value);
-    return db_->Put(default_write_options_, key, strings_value.Encode());
+    return vdb_->Put(default_write_options_, key, strings_value.Encode());
   } else if (s.IsNotFound()) {
     std::string tmp(start_offset, '\0');
     new_value = tmp.append(value.data());
     *ret = new_value.length();
     StringsValue strings_value(new_value);
-    return db_->Put(default_write_options_, key, strings_value.Encode());
+    return vdb_->Put(default_write_options_, key, strings_value.Encode());
   }
   return s;
 }
@@ -1199,10 +1202,10 @@ Status RedisStrings::Expire(const Slice& key, int32_t ttl) {
       str[sizeof(int32_t)+key.size() ] = '\0';
       EncodeFixed32(str,parsed_strings_value.timestamp());
       memcpy(str + sizeof(int32_t) , key.data(),key.size());
-      db_->Put(default_write_options_,handles_[1],{str,sizeof(int32_t)+key.size()}, "1" );
-      return db_->Put(default_write_options_,key, value);
+      vdb_->Put(default_write_options_,handles_[1],{str,sizeof(int32_t)+key.size()}, "1" );
+      return vdb_->Put(default_write_options_,key, value);
     } else {
-      return db_->Delete(default_write_options_, key);
+      return vdb_->Delete(default_write_options_, key);
     }
   }
   return s;
@@ -1217,7 +1220,7 @@ Status RedisStrings::Del(const Slice& key) {
     if (parsed_strings_value.IsStale()) {
       return Status::NotFound("Stale");
     }
-    return db_->Delete(default_write_options_, key);
+    return vdb_->Delete(default_write_options_, key);
   }
   return s;
 }
@@ -1282,10 +1285,10 @@ Status RedisStrings::Expireat(const Slice& key, int32_t timestamp) {
         str[sizeof(int32_t)+key.size() ] = '\0';
         EncodeFixed32(str,parsed_strings_value.timestamp());
         memcpy(str + sizeof(int32_t) , key.data(),key.size());
-        db_->Put(default_write_options_,handles_[1],{str,sizeof(int32_t)+key.size()}, "1" );
-        return db_->Put(default_write_options_, key, value);
+        vdb_->Put(default_write_options_,handles_[1],{str,sizeof(int32_t)+key.size()}, "1" );
+        return vdb_->Put(default_write_options_, key, value);
       } else {
-        return db_->Delete(default_write_options_, key);
+        return vdb_->Delete(default_write_options_, key);
       }
     }
   }
@@ -1306,7 +1309,7 @@ Status RedisStrings::Persist(const Slice& key) {
         return Status::NotFound("Not have an associated timeout");
       } else {
         parsed_strings_value.set_timestamp(0);
-        return db_->Put(default_write_options_, key, value);
+        return vdb_->Put(default_write_options_, key, value);
       }
     }
   }
@@ -1397,10 +1400,10 @@ Status RedisStrings::DelTimeout(BlackWidow * bw,std::string * key) {
         if (s.ok()) {
           ParsedStringsValue parsed_strings_value(&value);
           if (parsed_strings_value.IsStale()) {
-            db_->Delete(default_write_options_,*key);
+            vdb_->Delete(default_write_options_,*key);
           }
         }
-      s = db_->Delete(shannon::WriteOptions(), handles_[1], iter->key());
+      s = vdb_->Delete(shannon::WriteOptions(), handles_[1], iter->key());
   }
   else  *key = "";
   delete iter;
@@ -1409,11 +1412,11 @@ Status RedisStrings::DelTimeout(BlackWidow * bw,std::string * key) {
 
 Status RedisStrings::LogAdd(const Slice& key, const Slice& value,
                           const std::string& cf_name) {
-  return db_->Put(default_write_options_, key, value);
+  return vdb_->Put(default_write_options_, key, value);
 }
 
 Status RedisStrings::LogDelete(const Slice& key, const std::string& cf_name) {
-  return db_->Delete(default_write_options_, key);
+  return vdb_->Delete(default_write_options_, key);
 }
 
 }  //  namespace blackwidow

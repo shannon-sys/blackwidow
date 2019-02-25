@@ -141,6 +141,7 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
   lists_log_count_ = bw_options.lists_log_count;
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
   if (s.ok()) {
+      vdb_ = new VDB(db_);
       // Read meta info to cache
       std::vector<shannon::Iterator*> iters;
       Status status = db_->NewIterators(shannon::ReadOptions(), handles_, &iters);
@@ -169,7 +170,7 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
           std::string v;
           uint32_t log_count = 0, log_index_max = 0;
           std::string seek_key;
-          shannon::WriteBatch batch;
+          VWriteBatch batch;
           int32_t version = parsed_lists_meta_value.version();
           seek_key.resize(slice_key.size() + sizeof(int32_t));
           memcpy(const_cast<char*>(seek_key.data()), slice_key.data(), slice_key.size());
@@ -193,7 +194,7 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
               char buf[4];
               EncodeFixed32(buf, 0);
               batch.Put(handles_[3], slice_key, Slice(buf, sizeof(int32_t)));
-              s = db_->Write(shannon::WriteOptions(), &batch);
+              s = vdb_->Write(shannon::WriteOptions(), &batch);
               batch.Clear();
           }
           // meta_infos_list_.insert(make_pair(string(slice_key.data()), meta_value));
@@ -352,7 +353,7 @@ Status RedisLists::LInsert(const Slice& key,
                            const std::string& value,
                            int64_t* ret) {
   *ret = 0;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
   std::string *meta_value;
   Status s;
@@ -422,7 +423,7 @@ Status RedisLists::LInsert(const Slice& key,
             batch.Put(handles_[3], key, Slice(buf, sizeof(int32_t)));
         }
         *ret = parsed_lists_meta_value.count();
-        s = db_->Write(default_write_options_, &batch);
+        s = vdb_->Write(default_write_options_, &batch);
         if (s.ok()) {
             delete meta_info->second;
             meta_info->second = meta_value;
@@ -460,7 +461,7 @@ Status RedisLists::LLen(const Slice& key, uint64_t* len) {
 
 Status RedisLists::LPop(const Slice& key, std::string* element) {
   uint32_t statistic = 0;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
   std::string *meta_value;
   std::unordered_map<std::string, std::string*>::iterator meta_info =
@@ -503,7 +504,7 @@ Status RedisLists::LPop(const Slice& key, std::string* element) {
             EncodeFixed32(buf, parsed_lists_meta_value.log_index());
             batch.Put(handles_[3], key, Slice(buf, sizeof(int32_t)));
         }
-        s = db_->Write(default_write_options_, &batch);
+        s = vdb_->Write(default_write_options_, &batch);
         UpdateSpecificKeyStatistics(key.ToString(), statistic);
         if (s.ok()) {
             delete meta_info->second;
@@ -524,7 +525,7 @@ Status RedisLists::LPush(const Slice& key,
                          const std::vector<std::string>& values,
                          uint64_t* ret) {
   *ret = 0;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
   uint64_t index = 0;
@@ -595,7 +596,7 @@ Status RedisLists::LPush(const Slice& key,
     *ret = lists_meta_value.count();
     log_index = lists_meta_value.log_index();
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   if (s.ok()) {
       if (meta_info != meta_infos_list_.end()) {
           delete meta_info->second;
@@ -611,7 +612,7 @@ Status RedisLists::LPush(const Slice& key,
 
 Status RedisLists::LPushx(const Slice& key, const Slice& value, uint64_t* len) {
   *len = 0;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
   std::string *meta_value;
@@ -655,7 +656,7 @@ Status RedisLists::LPushx(const Slice& key, const Slice& value, uint64_t* len) {
           batch.Put(handles_[3], key, Slice(buf, sizeof(int32_t)));
       }
       *len = parsed_lists_meta_value.count();
-      s = db_->Write(default_write_options_, &batch);
+      s = vdb_->Write(default_write_options_, &batch);
       if (s.ok()) {
           delete meta_info->second;
           meta_info->second = meta_value;
@@ -729,7 +730,7 @@ Status RedisLists::LRange(const Slice& key, int64_t start, int64_t stop,
 Status RedisLists::LRem(const Slice& key, int64_t count,
                         const Slice& value, uint64_t* ret) {
   *ret = 0;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
   std::string *meta_value;
   std::unordered_map<std::string, std::string*>::iterator meta_info =
@@ -828,7 +829,7 @@ Status RedisLists::LRem(const Slice& key, int64_t count,
             batch.Put(handles_[3], key, Slice(buf, sizeof(int32_t)));
         }
         *ret = target_index.size();
-        s = db_->Write(default_write_options_, &batch);
+        s = vdb_->Write(default_write_options_, &batch);
         if (s.ok()) {
             delete meta_info->second;
             meta_info->second = meta_value;
@@ -872,9 +873,9 @@ Status RedisLists::LSet(const Slice& key, int64_t index, const Slice& value) {
         char str[sizeof(int32_t)+key.size() +1];
         EncodeFixed32(str,parsed_lists_meta_value.timestamp());
         memcpy(str + sizeof(int32_t) , key.data(),key.size());
-        db_->Put(default_write_options_,handles_[4], {str,sizeof(int32_t)+key.size()}, "1" );
+        vdb_->Put(default_write_options_,handles_[4], {str,sizeof(int32_t)+key.size()}, "1" );
       }
-      s = db_->Put(default_write_options_, handles_[1],
+      s = vdb_->Put(default_write_options_, handles_[1],
                    lists_data_key.Encode(), value);
       statistic++;
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
@@ -888,7 +889,7 @@ Status RedisLists::LSet(const Slice& key, int64_t index, const Slice& value) {
 
 Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
 
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
   uint32_t statistic = 0;
@@ -997,7 +998,7 @@ Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
   } else {
     return Status::NotFound();
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
 
   if (s.ok()) {
@@ -1011,7 +1012,7 @@ Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
 
 Status RedisLists::RPop(const Slice& key, std::string* element) {
   uint32_t statistic = 0;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
   std::string *meta_value;
@@ -1056,7 +1057,7 @@ Status RedisLists::RPop(const Slice& key, std::string* element) {
             EncodeFixed32(buf, 0);
             batch.Put(handles_[3], key, Slice(buf, sizeof(int32_t)));
         }
-        s = db_->Write(default_write_options_, &batch);
+        s = vdb_->Write(default_write_options_, &batch);
         UpdateSpecificKeyStatistics(key.ToString(), statistic);
         if (s.ok()) {
             delete meta_info->second;
@@ -1081,7 +1082,7 @@ Status RedisLists::RPoplpush(const Slice& source,
   element->clear();
   uint32_t statistic = 0;
   Status s;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
   std::string *meta_value;
   std::unordered_map<std::string, std::string*>::iterator meta_info;
   MultiScopeRecordLock l(lock_mgr_, {source.ToString(), destination.ToString()});
@@ -1128,7 +1129,7 @@ Status RedisLists::RPoplpush(const Slice& source,
         if (s.ok()) {
             *element = target;
         }
-        s = db_->Write(default_write_options_, &batch);
+        s = vdb_->Write(default_write_options_, &batch);
         UpdateSpecificKeyStatistics(source.ToString(), statistic);
         if (s.ok()) {
             delete meta_info->second;
@@ -1248,7 +1249,7 @@ Status RedisLists::RPoplpush(const Slice& source,
     batch.Put(handles_[0], destination, lists_meta_value.Encode());
   }
 
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
 
   if (s.ok()) {
     *element = target;
@@ -1271,7 +1272,7 @@ Status RedisLists::RPush(const Slice& key,
                          const std::vector<std::string>& values,
                          uint64_t* ret) {
   *ret = 0;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
 
   uint64_t index = 0;
   int32_t version = 0;
@@ -1334,7 +1335,7 @@ Status RedisLists::RPush(const Slice& key,
     batch.Put(handles_[0], key, lists_meta_value.Encode());
     *ret = lists_meta_value.count();
   }
-  s = db_->Write(default_write_options_, &batch);
+  s = vdb_->Write(default_write_options_, &batch);
   if (s.ok()) {
       if (meta_info != meta_infos_list_.end()) {
           delete meta_info->second;
@@ -1350,7 +1351,7 @@ Status RedisLists::RPush(const Slice& key,
 
 Status RedisLists::RPushx(const Slice& key, const Slice& value, uint64_t* len) {
   *len = 0;
-  shannon::WriteBatch batch;
+  VWriteBatch batch;
 
   ScopeRecordLock l(lock_mgr_, key);
   std::string *meta_value;
@@ -1394,7 +1395,7 @@ Status RedisLists::RPushx(const Slice& key, const Slice& value, uint64_t* len) {
       }
       batch.Put(handles_[1], lists_data_key.Encode(), value);
       *len = parsed_lists_meta_value.count();
-      s = db_->Write(default_write_options_, &batch);
+      s = vdb_->Write(default_write_options_, &batch);
       if (s.ok()) {
           delete meta_info->second;
           meta_info->second = meta_value;
@@ -1555,16 +1556,16 @@ Status RedisLists::Expire(const Slice& key, int32_t ttl) {
     uint64_t old_index = parsed_lists_meta_value.index();
     if (ttl > 0) {
       parsed_lists_meta_value.SetRelativeTimestamp(ttl);
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_info->second);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_info->second);
       if (parsed_lists_meta_value.timestamp() != 0 ) {
         char str[sizeof(int32_t)+key.size() +1];
         EncodeFixed32(str,parsed_lists_meta_value.timestamp());
         memcpy(str + sizeof(int32_t) , key.data(),key.size());
-        db_->Put(default_write_options_,handles_[4], {str,sizeof(int32_t)+key.size()}, "1" );
+        vdb_->Put(default_write_options_,handles_[4], {str,sizeof(int32_t)+key.size()}, "1" );
       }
     } else {
       parsed_lists_meta_value.InitialMetaValue();
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_info->second);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_info->second);
     }
     if (!s.ok()) {
         parsed_lists_meta_value.set_count(old_count);
@@ -1598,7 +1599,7 @@ Status RedisLists::Del(const Slice& key) {
     } else {
       uint32_t statistic = parsed_lists_meta_value.count();
       parsed_lists_meta_value.InitialMetaValue();
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_value);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
     if (s.ok()) {
@@ -1680,11 +1681,11 @@ Status RedisLists::Expireat(const Slice& key, int32_t timestamp) {
         char str[sizeof(int32_t) + key.size() + 1];
         EncodeFixed32(str,parsed_lists_meta_value.timestamp());
         memcpy(str + sizeof(int32_t) , key.data(),key.size());
-        db_->Put(default_write_options_,handles_[4], {str,sizeof(int32_t)+key.size()}, "1" );
+        vdb_->Put(default_write_options_,handles_[4], {str,sizeof(int32_t)+key.size()}, "1" );
       } else {
         parsed_lists_meta_value.InitialMetaValue();
       }
-      s = db_->Put(default_write_options_, handles_[0], key, *meta_info->second);
+      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_info->second);
       if (!s.ok()) {
         parsed_lists_meta_value.set_timestamp(old_timestamp);
       }
@@ -1713,7 +1714,7 @@ Status RedisLists::Persist(const Slice& key) {
         return Status::NotFound("Not have an associated timeout");
       } else {
         parsed_lists_meta_value.set_timestamp(0);
-        s = db_->Put(default_write_options_, handles_[0], key, *meta_info->second);
+        s = vdb_->Put(default_write_options_, handles_[0], key, *meta_info->second);
         if (!s.ok()) {
             parsed_lists_meta_value.set_timestamp(old_timestamp);
             parsed_lists_meta_value.set_count(old_count);
@@ -1830,7 +1831,7 @@ Status RedisLists::DelTimeout(BlackWidow * bw,std::string * key) {
    memcpy(const_cast<char *>(key->data()),slice_key.data()+sizeof(int32_t),iter->key().size()-sizeof(int32_t));
     s = RealDelTimeout(bw,key);
     if (s.ok()) {
-      s = db_->Delete(shannon::WriteOptions(), handles_[4], iter->key());
+      s = vdb_->Delete(shannon::WriteOptions(), handles_[4], iter->key());
     }
   }
   else  *key = "";
@@ -1854,7 +1855,7 @@ Status RedisLists::RealDelTimeout(BlackWidow * bw,std::string * key) {
       if (parsed_lists_meta_value.timestamp() < static_cast<int32_t>(unix_time))
       {
         AddDelKey(bw, *key);
-        s = db_->Delete(shannon::WriteOptions(), handles_[0], *key);
+        s = vdb_->Delete(shannon::WriteOptions(), handles_[0], *key);
         delete meta_info->second;
         meta_infos_list_.erase(*key);
       }
@@ -1868,7 +1869,7 @@ Status RedisLists::LogAdd(const Slice& key, const Slice& value,
   bool flag = false;
   for (auto cfh : handles_) {
     if (cfh->GetName() == cf_name) {
-      s = db_->Put(default_write_options_, cfh, key, value);
+      s = vdb_->Put(default_write_options_, cfh, key, value);
       if (!s.ok()) {
         return s;
       }
@@ -1902,7 +1903,7 @@ Status RedisLists::LogDelete(const Slice& key, const std::string& cf_name) {
   bool flag = false;
   for (auto cfh : handles_) {
     if (cfh->GetName() == cf_name) {
-      s = db_->Delete(default_write_options_, cfh, key);
+      s = vdb_->Delete(default_write_options_, cfh, key);
       if (!s.ok()) {
         return s;
       }

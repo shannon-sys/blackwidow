@@ -16,6 +16,7 @@
 
 #include "src/lock_mgr.h"
 #include "src/mutex_impl.h"
+#include "src/vdb.h"
 #include "blackwidow/blackwidow.h"
 
 #define LLONG_MAX 9223372036854775807
@@ -69,10 +70,27 @@ class Redis {
                         const std::string& cf_name) = 0;
   virtual Status LogDelete(const Slice& key, const std::string& cf_name) = 0;
 
+  int64_t GetWriteSize() {
+    return vdb_->GetWriteSize();
+  }
+
+  void ResetWriteSize() {
+    vdb_->ResetWriteSize();
+  }
+
+  int64_t GetAndResetWriteSize() {
+    mutex_write_size_.lock();
+    int64_t write_size = vdb_->GetWriteSize();
+    vdb_->ResetWriteSize();
+    mutex_write_size_.unlock();
+    return write_size;
+  }
  protected:
   BlackWidow* const bw_;
   DataType type_;
   LockMgr* lock_mgr_;
+  blackwidow::VDB* vdb_;
+  std::mutex mutex_write_size_;
   shannon::DB* db_;
   std::string default_device_name_ = "/dev/kvdev0";
   shannon::WriteOptions default_write_options_;

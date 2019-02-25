@@ -1986,4 +1986,24 @@ Status BlackWidow::LogCmdDeleteDB(const std::string& db_name) {
   return Status::OK();
 }
 
+int64_t BlackWidow::GetWriteSize() {
+  return strings_db_->GetWriteSize() + hashes_db_->GetWriteSize() +
+         lists_db_->GetWriteSize() + sets_db_->GetWriteSize() +
+         zsets_db_->GetWriteSize();
+}
+
+void BlackWidow::ResetWriteSize() {
+  strings_db_->ResetWriteSize();
+  hashes_db_->ResetWriteSize();
+  lists_db_->ResetWriteSize();
+  sets_db_->ResetWriteSize();
+  zsets_db_->ResetWriteSize();
+}
+
+int64_t BlackWidow::GetAndResetWriteSize() {
+  return strings_db_->GetAndResetWriteSize() + hashes_db_->GetAndResetWriteSize() +
+         lists_db_->GetAndResetWriteSize() + sets_db_->GetAndResetWriteSize() +
+         zsets_db_->GetAndResetWriteSize();
+}
+
 }  //  namespace blackwidow
