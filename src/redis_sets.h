@@ -87,6 +87,7 @@ class RedisSets : public Redis {
     virtual Status Expireat(const Slice& key, int32_t timestamp) override;
     virtual Status Persist(const Slice& key) override;
     virtual Status TTL(const Slice& key, int64_t* timestamp) override;
+    virtual std::vector<shannon::ColumnFamilyHandle*> GetColumnFamilyHandles() override;
     virtual Status AddDelKey(BlackWidow * bw,const string & str) override;
     virtual Status LogAdd(const Slice& key, const Slice& value,
                           const std::string& cf_name) override;

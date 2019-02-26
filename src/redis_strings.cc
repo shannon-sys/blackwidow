@@ -1341,6 +1341,9 @@ Status RedisStrings::TTL(const Slice& key, int64_t* timestamp) {
   return s;
 }
 
+std::vector<shannon::ColumnFamilyHandle*> RedisStrings::GetColumnFamilyHandles() {
+  return handles_;
+}
 void RedisStrings::ScanDatabase() {
 
   shannon::ReadOptions iterator_options;

@@ -1522,6 +1522,10 @@ Status RedisHashes::TTL(const Slice& key, int64_t* timestamp) {
   return s;
 }
 
+std::vector<shannon::ColumnFamilyHandle*> RedisHashes::GetColumnFamilyHandles() {
+  return handles_;
+}
+
 void RedisHashes::ScanDatabase() {
 
   shannon::ReadOptions iterator_options;

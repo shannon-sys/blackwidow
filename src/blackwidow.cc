@@ -65,6 +65,7 @@ BlackWidow::~BlackWidow() {
   delete zsets_db_;
   delete mutex_factory_;
   delete delkeys_db_;
+  delete delkeys_db_default_handle_;
 }
 
 static std::string AppendSubDirectory(const std::string& db_path,
@@ -126,7 +127,7 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
     shannon::Options ops(bw_options.options);
     ops.create_if_missing = true;
     ops.create_missing_column_families = true;
-    s = shannon::DB::Open(ops,"delkeys",  "/dev/kvdev0", &delkeys_db_);
+    s = shannon::DB::Open(ops, AppendSubDirectory(db_path, "delkeys"),  "/dev/kvdev0", &delkeys_db_);
       if (!s.ok()) {
         fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
         exit(-1);
@@ -1891,6 +1892,28 @@ Status BlackWidow::StopScanKeyNum() {
   return Status::OK();
 }
 
+std::vector<shannon::ColumnFamilyHandle*> BlackWidow::GetColumnFamilyHandlesByType(
+        const std::string& type) {
+  if (type == STRINGS_DB) {
+    return strings_db_->GetColumnFamilyHandles();
+  } else if (type == HASHES_DB) {
+    return hashes_db_->GetColumnFamilyHandles();
+  } else if (type == LISTS_DB) {
+    return lists_db_->GetColumnFamilyHandles();
+  } else if (type == SETS_DB) {
+    return sets_db_->GetColumnFamilyHandles();
+  } else if (type == ZSETS_DB) {
+    return zsets_db_->GetColumnFamilyHandles();
+  } else if (type == DELKEYS_DB) {
+    std::vector<ColumnFamilyHandle*> handles;
+    handles.push_back(delkeys_db_default_handle_);
+    return handles;
+  } else {
+    std::vector<shannon::ColumnFamilyHandle*> handles_empty_;
+    return handles_empty_;
+  }
+}
+
 shannon::DB* BlackWidow::GetDBByType(const std::string& type) {
   if (type == STRINGS_DB) {
     return strings_db_->GetDB();
@@ -1902,6 +1925,8 @@ shannon::DB* BlackWidow::GetDBByType(const std::string& type) {
     return sets_db_->GetDB();
   } else if (type == ZSETS_DB) {
     return zsets_db_->GetDB();
+  } else if (type == DELKEYS_DB) {
+    return delkeys_db_;
   } else {
     return NULL;
   }
@@ -1922,6 +1947,9 @@ shannon::DB* BlackWidow::GetDBByIndex(const int32_t db_index) {
   }
   if (zsets_db_->GetDB()->GetIndex() == db_index) {
     return zsets_db_->GetDB();
+  }
+  if (delkeys_db_->GetIndex() == db_index) {
+    return delkeys_db_;
   }
   return NULL;
 }
