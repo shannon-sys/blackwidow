@@ -1930,6 +1930,10 @@ Status RedisZSets::TTL(const Slice& key, int64_t* timestamp) {
   return s;
 }
 
+std::vector<shannon::ColumnFamilyHandle*> RedisZSets::GetColumnFamilyHandles() {
+  return handles_;
+}
+
 void RedisZSets::ScanDatabase() {
 
   shannon::ReadOptions iterator_options;

@@ -42,6 +42,7 @@ const std::string HASHES_DB = "hashes";
 const std::string LISTS_DB = "lists";
 const std::string ZSETS_DB = "zsets";
 const std::string SETS_DB = "sets";
+const std::string DELKEYS_DB = "delkeys";
 
 const uint32_t COMPACT_THRESHOLD_COUNT = 2000;
 
@@ -1105,6 +1106,8 @@ class BlackWidow {
   Status GetKeyNum(std::vector<KeyInfo>* key_infos);
   Status StopScanKeyNum();
 
+  // Other interface
+  std::vector<shannon::ColumnFamilyHandle*> GetColumnFamilyHandlesByType(const std::string& type);
   shannon::DB* GetDBByType(const std::string& type);
   shannon::DB* GetDBByIndex(const int32_t db_index);
   Status LogCmdAdd(const Slice& key, const Slice& value,
@@ -1134,6 +1137,7 @@ class BlackWidow {
   std::mutex quelock_;
   MutexFactory* mutex_factory_;
   shannon::DB* delkeys_db_;
+  shannon::ColumnFamilyHandle* delkeys_db_default_handle_;
   bool is_slave_;
 
   LRU<int64_t, std::string> cursors_store_;

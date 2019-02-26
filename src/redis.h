@@ -64,6 +64,8 @@ class Redis {
   virtual Status DoDelKey(){
     return Status::OK();
   };
+
+  virtual std::vector<shannon::ColumnFamilyHandle*> GetColumnFamilyHandles() = 0;
   virtual Status AddDelKey(BlackWidow * bw,const string & str) = 0;
 
   virtual Status LogAdd(const Slice& key, const Slice& value,
