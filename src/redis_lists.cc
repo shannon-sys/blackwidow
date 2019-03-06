@@ -683,14 +683,15 @@ Status RedisLists::LRange(const Slice& key, int64_t start, int64_t stop,
   std::unordered_map<std::string, std::string*>::iterator meta_info;
   meta_info = meta_infos_list_.find(key.data());
   if (meta_info != meta_infos_list_.end()) {
-    ParsedListsMetaValue parsed_lists_meta_value(meta_info->second);
+    std::string temp_cache(*meta_info->second);
+    ParsedListsMetaValue parsed_lists_meta_value(&temp_cache);
     if (parsed_lists_meta_value.IsStale()) {
       return Status::NotFound("Stale");
     } else if (parsed_lists_meta_value.count() == 0) {
       return Status::NotFound();
     } else {
       int32_t version = parsed_lists_meta_value.version();
-      uint64_t origin_left_index = 0;//parsed_lists_meta_value.left_index() + 1;
+      uint64_t origin_left_index = 0; //parsed_lists_meta_value.left_index() + 1;
       uint64_t origin_right_index = (uint64_t)parsed_lists_meta_value.count() - 1;
       uint64_t sublist_left_index = start >= 0 ?
                                     origin_left_index + start :
