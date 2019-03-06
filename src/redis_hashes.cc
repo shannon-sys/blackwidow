@@ -876,7 +876,7 @@ Status RedisHashes::HVals(const Slice& key,
   std::unordered_map<std::string, std::string*>::iterator meta_info =
       meta_infos_hashes_.find(key.data());
   if (meta_info != meta_infos_hashes_.end()) {
-    ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
+    ParsedHashesMetaValue parsed_hashes_meta_value(meta_info->second);
     if (parsed_hashes_meta_value.IsStale()) {
       return Status::NotFound("Stale");
     } else if (parsed_hashes_meta_value.count() == 0) {
