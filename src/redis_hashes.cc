@@ -592,6 +592,7 @@ Status RedisHashes::HMGet(const Slice& key,
                           std::vector<ValueStatus>* vss) {
   vss->clear();
   int32_t version = 0;
+  bool is_stale = false;
   std::string value;
   std::string meta_value;
   shannon::ReadOptions read_options;
@@ -603,10 +604,16 @@ Status RedisHashes::HMGet(const Slice& key,
       meta_infos_hashes_.find(key.data());
   if (meta_info != meta_infos_hashes_.end()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(meta_info->second);
-    if (parsed_hashes_meta_value.IsStale()) {
-      return Status::NotFound("Stale");
-    } else if (parsed_hashes_meta_value.count() == 0) {
-      return Status::NotFound();
+   //  if (parsed_hashes_meta_value.IsStale()) {
+   //   return Status::NotFound("Stale");
+   // } else if (parsed_hashes_meta_value.count() == 0) {
+   //   return Status::NotFound();
+    if ((is_stale = parsed_hashes_meta_value.IsStale())
+      || parsed_hashes_meta_value.count() == 0) {
+      for (size_t idx = 0; idx < fields.size(); ++ idx) {
+        vss->push_back({std::string(), Status::NotFound()});
+      }
+      return Status::NotFound(is_stale ? "Stale" : "");
     } else {
       version = parsed_hashes_meta_value.version();
       for (const auto& field : fields) {
