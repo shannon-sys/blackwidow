@@ -128,10 +128,24 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
     ops.create_if_missing = true;
     ops.create_missing_column_families = true;
     s = shannon::DB::Open(ops, AppendSubDirectory(db_path, "delkeys"),  "/dev/kvdev0", &delkeys_db_);
-      if (!s.ok()) {
-        fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
-        exit(-1);
-      }
+    if (!s.ok()) {
+      fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
+      exit(-1);
+    }
+    delete delkeys_db_;
+    shannon::DBOptions db_ops(bw_options.options);
+    std::vector<shannon::ColumnFamilyDescriptor> column_families;
+    std::vector<shannon::ColumnFamilyHandle*> delkeys_handles;
+    shannon::ColumnFamilyOptions default_cf_ops(bw_options.options);
+    column_families.push_back(shannon::ColumnFamilyDescriptor(
+                             "default", default_cf_ops));
+    s = shannon::DB::Open(ops, AppendSubDirectory(db_path, "delkeys"), "/dev/kvdev0",
+            column_families, &delkeys_handles, &delkeys_db_);
+    if (!s.ok()) {
+      fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
+      exit(-1);
+    }
+    delkeys_db_default_handle_ = delkeys_handles[0];
     shannon::DB *db = strings_db_->GetDB();
     db_path_len_ = db->GetName().length() -strlen("strings");
     CheckCleaning();
