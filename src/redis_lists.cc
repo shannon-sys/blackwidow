@@ -143,7 +143,8 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
   if (s.ok()) {
     meta_infos_list_.SetDb(db_);
     meta_infos_list_.SetColumnFamilyHandle(handles_[0]);
-    return RecoveryMetaValueFromLog();
+    if (bw_options.is_slave)
+      return RecoveryMetaValueFromLog();
   }
   return s;
 }
