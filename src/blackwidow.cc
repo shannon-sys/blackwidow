@@ -2028,6 +2028,11 @@ Status BlackWidow::LogCmdDeleteDB(const std::string& db_name) {
   return Status::OK();
 }
 
+Status BlackWidow::RecoveryMetaValue() {
+  shannon::Status s = lists_db_->RecoveryMetaValueFromLog();
+  return s;
+}
+
 int64_t BlackWidow::GetWriteSize() {
   return strings_db_->GetWriteSize() + hashes_db_->GetWriteSize() +
          lists_db_->GetWriteSize() + sets_db_->GetWriteSize() +
