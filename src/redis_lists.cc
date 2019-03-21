@@ -141,71 +141,77 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
   lists_log_count_ = bw_options.lists_log_count;
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
   if (s.ok()) {
-      vdb_ = new VDB(db_);
-      // Read meta info to cache
-      std::vector<shannon::Iterator*> iters;
-      Status status = db_->NewIterators(shannon::ReadOptions(), handles_, &iters);
-      shannon::Iterator* iter = iters[0];
-      shannon::Iterator* iter_log = iters[2];
-      shannon::Iterator* iter_count = iters[1];
-      uint32_t count = 0;
-      for (iter_count->SeekToFirst();
-           iter_count->Valid();
-           iter_count->Next()) {
-          count ++;
-      }
-      for (iter->SeekToFirst();
-           iter->Valid();
-           iter->Next()) {
-          Slice slice_key = iter->key();
-          Slice slice_value = iter->value();
-          std::string *meta_value = new std::string();
-          meta_value->resize(slice_value.size());
-          memcpy(const_cast<char *>(meta_value->data()), slice_value.data(), slice_value.size());
-          ParsedListsMetaValue parsed_lists_meta_value(meta_value);
-          if (parsed_lists_meta_value.IsStale()) {
-              delete meta_value;
-              continue;
-          }
-          std::string v;
-          uint32_t log_count = 0, log_index_max = 0;
-          std::string seek_key;
-          VWriteBatch batch;
-          int32_t version = parsed_lists_meta_value.version();
-          seek_key.resize(slice_key.size() + sizeof(int32_t));
-          memcpy(const_cast<char*>(seek_key.data()), slice_key.data(), slice_key.size());
-          EncodeFixed32(const_cast<char*>(seek_key.data() + slice_key.size()), version);
-          Slice temp_key = seek_key;
-          status = db_->Get(shannon::ReadOptions(), handles_[3], slice_key, &v);
-          if (status.ok()) {
-              log_index_max = DecodeFixed32(v.data());
-          }
-          for (iter_log->Seek(seek_key);
-               iter_log->Valid() && temp_key.starts_with(seek_key)
-               && log_count < log_index_max;
-               iter_log->Next()) {
-              temp_key = iter_log->key();
-              Slice value = iter_log->value();
-              parsed_lists_meta_value.ExecuteCmd(value.data());
-              log_count ++;
-          }
-          if (log_count > 0 && log_count == log_index_max) {
-              batch.Put(handles_[0], slice_key, *meta_value);
-              char buf[4];
-              EncodeFixed32(buf, 0);
-              batch.Put(handles_[3], slice_key, Slice(buf, sizeof(int32_t)));
-              s = vdb_->Write(shannon::WriteOptions(), &batch);
-              batch.Clear();
-          }
-          // meta_infos_list_.insert(make_pair(string(slice_key.data()), meta_value));
-      }
-      for (auto iter : iters) {
-          delete iter;
-      }
-      meta_infos_list_.SetDb(db_);
-      meta_infos_list_.SetColumnFamilyHandle(handles_[0]);
+    meta_infos_list_.SetDb(db_);
+    meta_infos_list_.SetColumnFamilyHandle(handles_[0]);
+    return RecoveryMetaValueFromLog();
   }
   return s;
+}
+
+Status RedisLists::RecoveryMetaValueFromLog() {
+  shannon::Status s;
+  vdb_ = new VDB(db_);
+  // Read meta info to cache
+  std::vector<shannon::Iterator*> iters;
+  Status status = db_->NewIterators(shannon::ReadOptions(), handles_, &iters);
+  shannon::Iterator* iter = iters[0];
+  shannon::Iterator* iter_count = iters[1];
+  shannon::Iterator* iter_log = iters[2];
+  uint32_t count = 0;
+  for (iter_count->SeekToFirst();
+    iter_count->Valid();
+    iter_count->Next()) {
+    count ++;
+  }
+  for (iter->SeekToFirst();
+    iter->Valid();
+    iter->Next()) {
+      Slice slice_key = iter->key();
+      Slice slice_value = iter->value();
+      std::string *meta_value = new std::string();
+      meta_value->resize(slice_value.size());
+      memcpy(const_cast<char *>(meta_value->data()), slice_value.data(), slice_value.size());
+      ParsedListsMetaValue parsed_lists_meta_value(meta_value);
+      if (parsed_lists_meta_value.IsStale()) {
+        delete meta_value;
+        continue;
+      }
+      std::string v;
+      uint32_t log_count = 0, log_index_max = 0;
+      std::string seek_key;
+      VWriteBatch batch;
+      int32_t version = parsed_lists_meta_value.version();
+      seek_key.resize(slice_key.size() + sizeof(int32_t));
+      memcpy(const_cast<char*>(seek_key.data()), slice_key.data(), slice_key.size());
+      EncodeFixed32(const_cast<char*>(seek_key.data() + slice_key.size()), version);
+      Slice temp_key = seek_key;
+      status = db_->Get(shannon::ReadOptions(), handles_[3], slice_key, &v);
+      if (status.ok()) {
+        log_index_max = DecodeFixed32(v.data());
+      }
+      for (iter_log->Seek(seek_key);
+           iter_log->Valid() && temp_key.starts_with(seek_key)
+           && log_count < log_index_max;
+           iter_log->Next()) {
+        temp_key = iter_log->key();
+        Slice value = iter_log->value();
+        parsed_lists_meta_value.ExecuteCmd(value.data());
+        log_count ++;
+      }
+      if (log_count > 0 && log_count == log_index_max) {
+        batch.Put(handles_[0], slice_key, *meta_value);
+        char buf[4];
+        EncodeFixed32(buf, 0);
+        batch.Put(handles_[3], slice_key, Slice(buf, sizeof(int32_t)));
+        s = vdb_->Write(shannon::WriteOptions(), &batch);
+        batch.Clear();
+      }
+      // meta_infos_list_.insert(make_pair(string(slice_key.data()), meta_value));
+    }
+    for (auto iter : iters) {
+      delete iter;
+    }
+    return s;
 }
 
 Status RedisLists::CompactRange(const shannon::Slice* begin,
