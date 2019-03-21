@@ -65,6 +65,7 @@ struct BlackwidowOptions {
   shannon::Options options;
   shannon::BlockBasedTableOptions table_options;
   int32_t lists_log_count;
+  int is_slave;
   size_t block_cache_size;
   bool share_block_cache;
   size_t statistics_max_size;

@@ -61,8 +61,8 @@ class RedisLists : public Redis {
                         std::vector<std::string>* keys, std::string* next_key);
     Status DelTimeout(BlackWidow * bw,std::string * key) ;
     Status RealDelTimeout(BlackWidow * bw,std::string * key) ;
-    Status RecoveryMetaValue(Slice key, int32_t version);
     void AddRecoveryMetaValueTask(Slice key, int32_t version);
+    Status RecoveryMetaValueFromLog();
 
     // Keys Commands
     virtual Status Expire(const Slice& key, int32_t ttl) override;
