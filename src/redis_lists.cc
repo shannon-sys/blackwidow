@@ -144,7 +144,7 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
     vdb_ = new VDB(db_);
     meta_infos_list_.SetDb(db_);
     meta_infos_list_.SetColumnFamilyHandle(handles_[0]);
-    if (bw_options.is_slave)
+    if (!bw_options.is_slave)
       return RecoveryMetaValueFromLog();
   }
   return s;
