@@ -141,6 +141,7 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
   lists_log_count_ = bw_options.lists_log_count;
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
   if (s.ok()) {
+    vdb_ = new VDB(db_);
     meta_infos_list_.SetDb(db_);
     meta_infos_list_.SetColumnFamilyHandle(handles_[0]);
     if (bw_options.is_slave)
@@ -151,7 +152,6 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
 
 Status RedisLists::RecoveryMetaValueFromLog() {
   shannon::Status s;
-  vdb_ = new VDB(db_);
   // Read meta info to cache
   std::vector<shannon::Iterator*> iters;
   Status status = db_->NewIterators(shannon::ReadOptions(), handles_, &iters);
