@@ -42,19 +42,6 @@ Status RedisStrings::Open(const BlackwidowOptions& bw_options,
   shannon::ColumnFamilyOptions timeout_cf_ops(bw_options.options);
   ops.compaction_filter_factory = std::make_shared<StringsFilterFactory>();
   //use the bloom filter policy to reduce disk reads
-  try {
-    shannon::BlockBasedTableOptions table_ops = bw_options.table_options;
-    shannon::BlockBasedTableOptions timeout_cf_table_ops(table_ops);
-    if (!bw_options.share_block_cache && bw_options.block_cache_size > 0) {
-        table_ops.block_cache = shannon::NewLRUCache(bw_options.block_cache_size);
-        timeout_cf_table_ops.block_cache = shannon::NewLRUCache(bw_options.block_cache_size);
-    }
-    table_ops.filter_policy.reset(shannon::NewBloomFilterPolicy(10, true));
-    ops.table_factory.reset(shannon::NewBlockBasedTableFactory(table_ops));
-    timeout_cf_ops.table_factory.reset(shannon::NewBlockBasedTableFactory(timeout_cf_table_ops));
-  } catch(std::runtime_error e) {
-      std::cout<<e.what()<<std::endl;
-  }
   std::vector<shannon::ColumnFamilyDescriptor> column_families;
   column_families.push_back(shannon::ColumnFamilyDescriptor(
     shannon::kDefaultColumnFamilyName, ops));

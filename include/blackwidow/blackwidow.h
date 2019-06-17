@@ -47,7 +47,6 @@ const std::string DELKEYS_DB = "delkeys";
 const uint32_t COMPACT_THRESHOLD_COUNT = 2000;
 
 using Options = shannon::Options;
-using BlockBasedTableOptions = shannon::BlockBasedTableOptions;
 using Status = shannon::Status;
 using Slice = shannon::Slice;
 
@@ -63,7 +62,6 @@ class BlackWidow;
 
 struct BlackwidowOptions {
   shannon::Options options;
-  shannon::BlockBasedTableOptions table_options;
   int32_t lists_log_count;
   int is_slave;
   size_t block_cache_size;

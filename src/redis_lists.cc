@@ -100,26 +100,6 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
   data_cf_ops.comparator = ListsDataKeyComparator();
 
   //use the bloom filter policy to reduce disk reads
-  shannon::BlockBasedTableOptions table_ops(bw_options.table_options);
-  table_ops.filter_policy.reset(shannon::NewBloomFilterPolicy(10, true));
-  shannon::BlockBasedTableOptions meta_cf_table_ops(table_ops);
-  shannon::BlockBasedTableOptions data_cf_table_ops(table_ops);
-  shannon::BlockBasedTableOptions log_cf_table_ops(table_ops);
-  shannon::BlockBasedTableOptions index_cf_table_ops(table_ops);
-  shannon::BlockBasedTableOptions timeout_cf_table_ops(table_ops);
-
-  if (!bw_options.share_block_cache && bw_options.block_cache_size > 0) {
-    meta_cf_table_ops.block_cache = shannon::NewLRUCache(bw_options.block_cache_size);
-    data_cf_table_ops.block_cache = shannon::NewLRUCache(bw_options.block_cache_size);
-    log_cf_table_ops.block_cache = shannon::NewLRUCache(bw_options.block_cache_size);
-    index_cf_table_ops.block_cache = shannon::NewLRUCache(bw_options.block_cache_size);
-    timeout_cf_table_ops.block_cache = shannon::NewLRUCache(bw_options.block_cache_size);
-  }
-  meta_cf_ops.table_factory.reset(shannon::NewBlockBasedTableFactory(meta_cf_table_ops));
-  data_cf_ops.table_factory.reset(shannon::NewBlockBasedTableFactory(data_cf_table_ops));
-  log_cf_ops.table_factory.reset(shannon::NewBlockBasedTableFactory(log_cf_table_ops));
-  index_cf_ops.table_factory.reset(shannon::NewBlockBasedTableFactory(index_cf_table_ops));
-  timeout_cf_ops.table_factory.reset(shannon::NewBlockBasedTableFactory(timeout_cf_table_ops));
 
   std::vector<shannon::ColumnFamilyDescriptor> column_families;
   // Meta CF
