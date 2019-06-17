@@ -59,7 +59,6 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
     shannon::ColumnFamilyHandle* cf_log;
     shannon::ColumnFamilyHandle* cf_index;
     shannon::ColumnFamilyOptions cfo;
-    cfo.comparator = ListsDataKeyComparator();
     s = db_->CreateColumnFamily(cfo, "data_cf", &cf);
     if (!s.ok()) {
       return s;
@@ -97,7 +96,6 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
 
   meta_cf_ops.compaction_filter_factory = std::make_shared<ListsMetaFilterFactory>();
   data_cf_ops.compaction_filter_factory = std::make_shared<ListsDataFilterFactory>(&db_, &handles_);
-  data_cf_ops.comparator = ListsDataKeyComparator();
 
   //use the bloom filter policy to reduce disk reads
 

@@ -57,7 +57,6 @@ Status RedisZSets::Open(const BlackwidowOptions& bw_options,
       return s;
     }
     shannon::ColumnFamilyOptions score_cf_ops;
-    score_cf_ops.comparator = ZSetsScoreKeyComparator();
     s = db_->CreateColumnFamily(score_cf_ops, "score_cf", &scf);
     if (!s.ok()) {
       return s;
@@ -85,7 +84,6 @@ Status RedisZSets::Open(const BlackwidowOptions& bw_options,
     std::make_shared<ZSetsDataFilterFactory>(&db_, &handles_);
   score_cf_ops.compaction_filter_factory =
     std::make_shared<ZSetsScoreFilterFactory>(&db_, &handles_);
-  score_cf_ops.comparator = ZSetsScoreKeyComparator();
 
   //use the bloom filter policy to reduce disk reads
   std::vector<shannon::ColumnFamilyDescriptor> column_families;
