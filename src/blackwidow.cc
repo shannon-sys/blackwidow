@@ -81,11 +81,8 @@ static std::string AppendSubDirectory(const std::string& db_path,
 Status BlackWidow::Open(BlackwidowOptions& bw_options,
                         const std::string& db_path) {
   mkpath(db_path.c_str(), 0755);
-  if (bw_options.block_cache_size == 0) {
-    bw_options.table_options.no_block_cache = true;
-  } else if (bw_options.share_block_cache) {
+  if (bw_options.share_block_cache) {
     bw_options.block_cache_size = 100;
-    bw_options.table_options.block_cache = shannon::NewLRUCache(bw_options.block_cache_size);
   }
   strings_db_ = new RedisStrings(this, kStrings);
   Status s = strings_db_->Open(bw_options, AppendSubDirectory(db_path, "strings"));
