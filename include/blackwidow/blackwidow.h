@@ -1115,7 +1115,6 @@ class BlackWidow {
                       const std::string& cf_name);
   Status LogCmdCreateDB(const std::string& db_name);
   Status LogCmdDeleteDB(const std::string& db_name);
-  Status RecoveryMetaValue();
   int64_t GetWriteSize();
   void ResetWriteSize();
   int64_t GetAndResetWriteSize();
