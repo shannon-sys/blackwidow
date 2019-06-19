@@ -61,8 +61,6 @@ class RedisLists : public Redis {
                         std::vector<std::string>* keys, std::string* next_key);
     Status DelTimeout(BlackWidow * bw,std::string * key) ;
     Status RealDelTimeout(BlackWidow * bw,std::string * key) ;
-    void AddRecoveryMetaValueTask(Slice key, int32_t version);
-    Status RecoveryMetaValueFromLog();
 
     // Keys Commands
     virtual Status Expire(const Slice& key, int32_t ttl) override;
@@ -83,8 +81,6 @@ class RedisLists : public Redis {
 
   private:
     std::vector<shannon::ColumnFamilyHandle*> handles_;
-    shannon::DB* db_meta_value_log_;
-    uint32_t lists_log_count_ = 0;
 };
 
 }  //  namespace blackwidow
