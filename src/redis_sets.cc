@@ -348,7 +348,12 @@ Status RedisSets::SDiff(const std::vector<std::string>& keys,
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(keys[0], version, Slice());
       prefix = sets_member_key.Encode();
+      // set iterator prefetch only key
+      bool old_only_read_key = read_options.only_read_key;
+      read_options.only_read_key = true;
       auto iter = db_->NewIterator(read_options, handles_[1]);
+      read_options.only_read_key = old_only_read_key;
+
       for (iter->Seek(prefix);
            iter->Valid() && iter->key().starts_with(prefix);
            iter->Next()) {
@@ -423,7 +428,11 @@ Status RedisSets::SDiffstore(const Slice& destination,
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(keys[0], version, Slice());
       Slice prefix = sets_member_key.Encode();
+      // set only read key
+      bool old_only_read_key = read_options.only_read_key;
+      read_options.only_read_key = true;
       auto iter = db_->NewIterator(read_options, handles_[1]);
+      read_options.only_read_key = old_only_read_key;
       for (iter->Seek(prefix);
            iter->Valid() && iter->key().starts_with(prefix);
            iter->Next()) {
@@ -535,7 +544,10 @@ Status RedisSets::SInter(const std::vector<std::string>& keys,
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(keys[0], version, Slice());
       Slice prefix = sets_member_key.Encode();
+      bool old_only_read_key = read_options.only_read_key;
+      read_options.only_read_key = true;
       auto iter = db_->NewIterator(read_options, handles_[1]);
+      read_options.only_read_key = old_only_read_key;
       for (iter->Seek(prefix);
            iter->Valid() && iter->key().starts_with(prefix);
            iter->Next()) {
@@ -620,7 +632,10 @@ Status RedisSets::SInterstore(const Slice& destination,
         version = parsed_sets_meta_value.version();
         SetsMemberKey sets_member_key(keys[0], version, Slice());
         Slice prefix = sets_member_key.Encode();
+	bool old_only_read_key = read_options.only_read_key;
+	read_options.only_read_key = true;
         auto iter = db_->NewIterator(read_options, handles_[1]);
+	read_options.only_read_key = old_only_read_key;
         for (iter->Seek(prefix);
              iter->Valid() && iter->key().starts_with(prefix);
              iter->Next()) {
@@ -744,6 +759,7 @@ Status RedisSets::SMembers(const Slice& key,
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(key, version, Slice());
       Slice prefix = sets_member_key.Encode();
+      read_options.only_read_key = true;
       auto iter = db_->NewIterator(read_options, handles_[1]);
       for (iter->Seek(prefix);
            iter->Valid() && iter->key().starts_with(prefix);
@@ -894,16 +910,17 @@ Status RedisSets::SPop(const Slice& key, std::string* member, bool* need_compact
       int32_t version = parsed_sets_meta_value.version();
 
       SetsMemberKey sets_member_key(key, version, Slice());
-      auto iter = db_->NewIterator(default_read_options_, handles_[1]);
+      shannon::ReadOptions read_options = default_read_options_;
+      // only read key, not read value
+      read_options.only_read_key = true;
+      auto iter = db_->NewIterator(read_options, handles_[1]);
       for (iter->Seek(sets_member_key.Encode());
            iter->Valid() && cur_index < size;
            iter->Next(), cur_index++) {
-
         if (cur_index == target_index) {
           batch.Delete(handles_[1], iter->key());
           ParsedSetsMemberKey parsed_sets_member_key(iter->key());
           *member = parsed_sets_member_key.member().ToString();
-
           parsed_sets_meta_value.ModifyCount(-1);
           batch.Put(handles_[0], key, *meta_value);
           break;
@@ -1011,7 +1028,9 @@ Status RedisSets::SRandmember(const Slice& key, int32_t count,
 
       int32_t cur_index = 0, idx = 0;
       SetsMemberKey sets_member_key(key, version, Slice());
-      auto iter = db_->NewIterator(default_read_options_, handles_[1]);
+      shannon::ReadOptions read_options = default_read_options_;
+      read_options.only_read_key = true;
+      auto iter = db_->NewIterator(read_options, handles_[1]);
       for (iter->Seek(sets_member_key.Encode());
            iter->Valid() && cur_index < size;
            iter->Next(), cur_index++) {
@@ -1121,6 +1140,7 @@ Status RedisSets::SUnion(const std::vector<std::string>& keys,
 
   Slice prefix;
   std::map<std::string, bool> result_flag;
+  read_options.only_read_key = true;
   for (const auto& key_version : vaild_sets) {
     SetsMemberKey sets_member_key(key_version.key, key_version.version, Slice());
     prefix = sets_member_key.Encode();
@@ -1179,6 +1199,7 @@ Status RedisSets::SUnionstore(const Slice& destination,
   for (const auto& key_version : vaild_sets) {
     SetsMemberKey sets_member_key(key_version.key, key_version.version, Slice());
     prefix = sets_member_key.Encode();
+    read_options.only_read_key = true;
     auto iter = db_->NewIterator(read_options, handles_[1]);
     for (iter->Seek(prefix);
          iter->Valid() && iter->key().starts_with(prefix);
@@ -1274,6 +1295,7 @@ Status RedisSets::SScan(const Slice& key, int64_t cursor, const std::string& pat
       SetsMemberKey sets_member_prefix(key, version, sub_member);
       SetsMemberKey sets_member_key(key, version, start_point);
       std::string prefix = sets_member_prefix.Encode().ToString();
+      read_options.only_read_key = true;
       shannon::Iterator* iter = db_->NewIterator(read_options, handles_[1]);
       for (iter->Seek(sets_member_key.Encode());
            iter->Valid() && rest > 0 && iter->key().starts_with(prefix);
@@ -1325,7 +1347,6 @@ Status RedisSets::PKScanRange(const Slice& key_start, const Slice& key_end,
     && (key_start.compare(key_end) > 0)) {
     return Status::InvalidArgument("error in given range");
   }
-
   shannon::Iterator* it = db_->NewIterator(iterator_options, handles_[0]);
   if (start_no_limit) {
     it->SeekToFirst();
@@ -1692,6 +1713,7 @@ void RedisSets::ScanDatabase() {
   delete meta_iter;
 
   printf("\n***************Sets Member Data***************\n");
+  iterator_options.only_read_key = true;
   auto member_iter = db_->NewIterator(iterator_options, handles_[1]);
   for (member_iter->SeekToFirst();
        member_iter->Valid();
