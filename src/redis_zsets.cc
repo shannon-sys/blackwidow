@@ -379,6 +379,7 @@ Status RedisZSets::ZCount(const Slice& key,
       int32_t stop_index = parsed_zsets_meta_value.count() - 1;
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version, std::numeric_limits<double>::lowest(), Slice());
+      read_options.only_read_key = true;
       shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
       for (iter->Seek(zsets_score_key.Encode());
            iter->Valid() && cur_index <= stop_index;
@@ -524,6 +525,7 @@ Status RedisZSets::ZRange(const Slice& key,
       int32_t cur_index = 0;
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version, std::numeric_limits<double>::lowest(), Slice());
+      read_options.only_read_key = true;
       shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
       for (iter->Seek(zsets_score_key.Encode());
            iter->Valid() && cur_index <= stop_index;
@@ -572,6 +574,7 @@ Status RedisZSets::ZRangebyscore(const Slice& key,
       int32_t stop_index = parsed_zsets_meta_value.count() - 1;
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version, std::numeric_limits<double>::lowest(), Slice());
+      read_options.only_read_key = true;
       shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
       for (iter->Seek(zsets_score_key.Encode());
            iter->Valid() && index <= stop_index;
@@ -630,6 +633,7 @@ Status RedisZSets::ZRank(const Slice& key,
       int32_t stop_index = parsed_zsets_meta_value.count() - 1;
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version, std::numeric_limits<double>::lowest(), Slice());
+      read_options.only_read_key = true;
       shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
       for (iter->Seek(zsets_score_key.Encode());
            iter->Valid() && index <= stop_index;
@@ -761,7 +765,9 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
       start_index = start_index <= 0 ? 0 : start_index;
       stop_index = stop_index >= count ? count - 1 : stop_index;
       ZSetsScoreKey zsets_score_key(key, version, std::numeric_limits<double>::lowest(), Slice());
-      shannon::Iterator* iter = db_->NewIterator(default_read_options_, handles_[2]);
+      shannon::ReadOptions read_options = default_read_options_;
+      read_options.only_read_key = true;
+      shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
       for (iter->Seek(zsets_score_key.Encode());
            iter->Valid() && cur_index <= stop_index;
            iter->Next(), ++cur_index) {
@@ -826,7 +832,9 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
       int32_t stop_index = parsed_zsets_meta_value.count() - 1;
       int32_t version = parsed_zsets_meta_value.version();
       ZSetsScoreKey zsets_score_key(key, version, std::numeric_limits<double>::lowest(), Slice());
-      shannon::Iterator* iter = db_->NewIterator(default_read_options_, handles_[2]);
+      shannon::ReadOptions read_options = default_read_options_;
+      read_options.only_read_key = true;
+      shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
       for (iter->Seek(zsets_score_key.Encode());
            iter->Valid() && cur_index <= stop_index;
            iter->Next(), ++cur_index) {
@@ -907,6 +915,7 @@ Status RedisZSets::ZRevrange(const Slice& key,
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version,
           std::numeric_limits<double>::max(), Slice());
+      read_options.only_read_key = true;
       shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
       for (iter->SeekForPrev(zsets_score_key.Encode());
            iter->Valid() && cur_index >= start_index;
@@ -951,6 +960,7 @@ Status RedisZSets::ZRevrangebyscore(const Slice& key,
       int32_t left = parsed_zsets_meta_value.count();
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version, std::numeric_limits<double>::max(), Slice());
+      read_options.only_read_key = true;
       shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
       for (iter->SeekForPrev(zsets_score_key.Encode());
            iter->Valid() && left > 0;
@@ -1009,6 +1019,7 @@ Status RedisZSets::ZRevrank(const Slice& key,
       int32_t left = parsed_zsets_meta_value.count();
       int32_t version = parsed_zsets_meta_value.version();
       ZSetsScoreKey zsets_score_key(key, version, std::numeric_limits<double>::max(), Slice());
+      read_options.only_read_key = true;
       shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
       for (iter->SeekForPrev(zsets_score_key.Encode());
            iter->Valid() && left >= 0;
@@ -1103,6 +1114,7 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
         double weight = idx < weights.size() ? weights[idx] : 1;
         version = parsed_zsets_meta_value.version();
         ZSetsScoreKey zsets_score_key(keys[idx], version, std::numeric_limits<double>::lowest(), Slice());
+	read_options.only_read_key = true;
         shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
         for (iter->Seek(zsets_score_key.Encode());
              iter->Valid() && cur_index <= stop_index;
@@ -1227,6 +1239,7 @@ Status RedisZSets::ZInterstore(const Slice& destination,
 
   if (!have_invalid_zsets) {
     ZSetsScoreKey zsets_score_key(vaild_zsets[0].key, vaild_zsets[0].version, std::numeric_limits<double>::lowest(), Slice());
+    read_options.only_read_key = true;
     shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
     for (iter->Seek(zsets_score_key.Encode());
          iter->Valid() && cur_index <= stop_index;
@@ -1345,6 +1358,7 @@ Status RedisZSets::ZRangebylex(const Slice& key,
       int32_t cur_index = 0;
       int32_t stop_index = parsed_zsets_meta_value.count() - 1;
       ZSetsMemberKey zsets_member_key(key, version, Slice());
+      read_options.only_read_key = true;
       shannon::Iterator* iter = db_->NewIterator(read_options, handles_[1]);
       for (iter->Seek(zsets_member_key.Encode());
            iter->Valid() && cur_index <= stop_index;
@@ -1965,6 +1979,7 @@ void RedisZSets::ScanDatabase() {
   delete member_iter;
 
   printf("\n***************ZSets Score To Member Data***************\n");
+  iterator_options.only_read_key = true;
   auto score_iter = db_->NewIterator(iterator_options, handles_[2]);
   for (score_iter->SeekToFirst();
        score_iter->Valid();

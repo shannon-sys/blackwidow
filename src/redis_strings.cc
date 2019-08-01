@@ -556,28 +556,58 @@ Status RedisStrings::MGet(const std::vector<std::string>& keys,
   vss->clear();
 
   Status s;
-  std::string value;
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot;
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
+  shannon::ReadBatch read_batch;
+  std::vector<std::string> values;
+  int read_count = 0;
   for (const auto& key : keys) {
-    s = db_->Get(read_options, key, &value);
-    if (s.ok()) {
-      ParsedStringsValue parsed_strings_value(&value);
-      if (parsed_strings_value.IsStale()) {
-        vss->push_back({std::string(), Status::NotFound("Stale")});
-      } else {
-        vss->push_back(
-            {parsed_strings_value.user_value().ToString(), Status::OK()});
+    s = read_batch.Get(key);
+    read_count ++;
+    if (s.IsBatchFull()) {
+      s = db_->Read(read_options, &read_batch, &values);
+      if (!s.ok()) {
+        return s;
       }
-    } else if (s.IsNotFound()) {
-      vss->push_back({std::string(), Status::NotFound()});
-    } else {
-      vss->clear();
+      for (auto v : values) {
+        if (v.size() == 0) {
+	      vss->push_back({std::string(), Status::NotFound("Stale")});
+	    } else {
+	      ParsedStringsValue parsed_strings_value(&v);
+          if (parsed_strings_value.IsStale()) {
+            vss->push_back({std::string(), Status::NotFound("Stale")});
+          } else {
+            vss->push_back({parsed_strings_value.user_value().ToString(), Status::OK()});
+          }
+	  }
+    }
+      read_batch.Clear();
+      read_count = 0;
+    } // end batch full
+  }
+  if (read_count > 0) {
+    s = db_->Read(read_options, &read_batch, &values);
+    if (!s.ok()) {
       return s;
     }
-  }
+    for (auto v : values) {
+      if (v.size() == 0) {
+        vss->push_back({std::string(), Status::NotFound("Stale")});
+      } else {
+	    ParsedStringsValue parsed_strings_value(&v);
+        if (parsed_strings_value.IsStale()) {
+	      vss->push_back({std::string(), Status::NotFound("Stale")});
+        } else {
+          std::string vv = parsed_strings_value.user_value().ToString();
+          vss->push_back({parsed_strings_value.user_value().ToString(), Status::OK()});
+        }
+      }
+    }
+    read_batch.Clear();
+    read_count = 0;
+  } // end read_batch read
   return Status::OK();
 }
 
@@ -1363,7 +1393,9 @@ void RedisStrings::ScanDatabase() {
 }
 Status RedisStrings::DelTimeout(BlackWidow * bw,std::string * key) {
   Status s = Status::OK();
-  shannon::Iterator *iter = db_->NewIterator(shannon::ReadOptions(), handles_[1]);
+  shannon::ReadOptions read_options;
+  read_options.only_read_key = true;
+  shannon::Iterator *iter = db_->NewIterator(read_options, handles_[1]);
   if (nullptr == iter) {
     *key = "";
     return s;

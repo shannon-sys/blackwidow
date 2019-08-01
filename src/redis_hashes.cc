@@ -591,10 +591,6 @@ Status RedisHashes::HMGet(const Slice& key,
       meta_infos_hashes_.find(key.data());
   if (meta_info != meta_infos_hashes_.end()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(meta_info->second);
-   //  if (parsed_hashes_meta_value.IsStale()) {
-   //   return Status::NotFound("Stale");
-   // } else if (parsed_hashes_meta_value.count() == 0) {
-   //   return Status::NotFound();
     if ((is_stale = parsed_hashes_meta_value.IsStale())
       || parsed_hashes_meta_value.count() == 0) {
       for (size_t idx = 0; idx < fields.size(); ++ idx) {
@@ -603,17 +599,28 @@ Status RedisHashes::HMGet(const Slice& key,
       return Status::NotFound(is_stale ? "Stale" : "");
     } else {
       version = parsed_hashes_meta_value.version();
+      std::vector<std::string> values;
+      shannon::ReadBatch read_batch;
       for (const auto& field : fields) {
         HashesDataKey hashes_data_key(key, version, field);
-        s = db_->Get(read_options, handles_[1],
-                hashes_data_key.Encode(), &value);
-        if (s.ok()) {
-          vss->push_back({value, Status::OK()});
-        } else if (s.IsNotFound()) {
+        s = read_batch.Get(handles_[1], hashes_data_key.Encode());
+	    if (!s.ok()) {
+	      vss->clear();
+	      read_batch.Clear();
+	      return s;
+	    }
+      }
+      s = db_->Read(read_options, &read_batch, &values);
+      if (!s.ok()) {
+        read_batch.Clear();
+        return s;
+      }
+      for (const auto& value : values) {
+        // not found
+        if (value.length() == 0) {
           vss->push_back({std::string(), Status::NotFound()});
-        } else {
-          vss->clear();
-          return s;
+	    } else {
+          vss->push_back({value, Status::OK()});
         }
       }
     }
