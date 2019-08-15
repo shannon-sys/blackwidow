@@ -10,10 +10,12 @@
 using namespace blackwidow;
 
 int main() {
-  blackwidow::Options options;
-  options.create_if_missing = true;
+ int cases = 10;
+while (cases --){
+  blackwidow::BlackwidowOptions options;
+  options.options.create_if_missing = true;
   blackwidow::BlackWidow db;
-  blackwidow::Status s = db.Open(options, "./db");
+  blackwidow::Status s = db.Open(options, "db");
   if (s.ok()) {
     printf("Open success\n");
   } else {
@@ -22,14 +24,20 @@ int main() {
   }
   // SAdd
   int32_t ret = 0;
-  std::vector<std::string> members {"MM1", "MM2", "MM3", "MM2"};
+  std::vector<std::string> members {"1", "2", "3", "4","5","6","7","a","c","f","t","p","o"};
   s = db.SAdd("SADD_KEY", members, &ret);
-  printf("SAdd return: %s, ret = %d\n", s.ToString().c_str(), ret);
+ // printf("SAdd return: %s, ret = %d\n", s.ToString().c_str(), ret);
 
   // SCard
   ret = 0;
-  s = db.SCard("SADD_KEY", &ret);
-  printf("SCard, return: %s, scard ret = %d\n", s.ToString().c_str(), ret);
+  bool f ;
+  std::string member;
+  for (int i =0 ; i < members.size(); i++){
+  s = db.SPop("SADD_KEY", &member );
+ // printf("SPop return: %s, ret = %d\n", s.ToString().c_str(), ret);
+  }
+printf ("%d",cases);
+}
 
   return 0;
 }
