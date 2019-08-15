@@ -13,6 +13,7 @@
 #include "src/redis_zsets.h"
 #include "src/redis_hyperloglog.h"
 #include "blackwidow/blackwidow.h"
+#include "skip_list.h"
 
 #include <vector>
 #include <iostream>
@@ -863,22 +864,22 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
     return Status::OK();
   }
 
-    Status BlackWidow::DoDelKey() {
-        Status s = Status::OK();
-        quelock_.lock();
-        queue<blackwidow::DelKey> keys;
-        swap(keys,delkeys_);
-        quelock_.unlock();
-        Status ss;
-        while (!keys.empty()) {
-            ss = RealDel(keys.front());
-            s = delkeys_db_->Delete(shannon::WriteOptions() , keys.front().db->GetName().substr(db_path_len_)+keys.front().name);
-            // cout << "--Del delseys_db-  "<<keys.front().name<<endl;
-            if (!ss.ok())s = ss;
-            keys.pop();
-        }
-        return s;
-    }
+  Status BlackWidow::DoDelKey() {
+      Status s = Status::OK();
+      quelock_.lock();
+      queue<blackwidow::DelKey> keys;
+      swap(keys,delkeys_);
+      quelock_.unlock();
+      Status ss;
+      while (!keys.empty()) {
+          ss = RealDel(keys.front());
+          s = delkeys_db_->Delete(shannon::WriteOptions() , keys.front().db->GetName().substr(db_path_len_)+keys.front().name);
+          // cout << "--Del delseys_db-  "<<keys.front().name<<endl;
+          if (!ss.ok())s = ss;
+          keys.pop();
+      }
+      return s;
+  }
     Status BlackWidow::RealDel(const blackwidow::DelKey &key) {
       //cout<<"real del ----------"<<key.name<<endl;
       Status ss = Status::OK();
@@ -911,8 +912,8 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
               iters[0]->Next()) {
           if (changed) ss=Status::NotSupported("Not supported operation in this mode.");
               flag = true;
-          // cout <<key.handle->GetName()<<"DoDelKey delete key  :  "
-          //         << iters[0]->key().ToString()  <<"---------------------------"  <<  endl;
+          cout <<key.handle->GetName()<<"DoDelKey delete key  :  "
+                  << iters[0]->key().ToString()  <<"---------------------------"  <<  endl;
           batch.Delete(key.handle,iters[0]->key());
           counts ++;
           if (counts > 300){
@@ -947,8 +948,7 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
       return str;
     };
     int64_t BlackWidow::DelByType(const std::vector<std::string> &keys,
-                                  DataType type)
-    {
+                                  DataType type) {
       Status s;
       int64_t count = 0;
       bool is_corruption = false;
@@ -1013,8 +1013,7 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
         }
         break;
       }
-      case DataType::kAll:
-      {
+      case DataType::kAll: {
         return -1;
       }
     }
