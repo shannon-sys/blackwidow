@@ -3,6 +3,7 @@
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
 #include "src/skip_list.h"
+#include <cstring>
 
 namespace blackwidow {
   void SkipList::show() {
@@ -201,7 +202,6 @@ namespace blackwidow {
       return false;
     }
     char *buffer = const_cast<char*>(this->buffer_str_->data() + prefix_);
-    int cur_level = skip_list_manager_->cur_level;
     // change next node's prev pointer
     if (node->next[0] != 0) {
       SkipListNode* next_node = reinterpret_cast<SkipListNode*>(buffer + node->next[0]);
@@ -216,7 +216,6 @@ namespace blackwidow {
     int cur_node_offset = ((char*)node) - buffer;
     SkipListNode* head_node;
     int head_index = (char*)skip_list_manager_->head - buffer;
-    int max_height = 0;
     while (head_index != 0) {
       head_node = reinterpret_cast<SkipListNode*>(buffer + head_index);
       int next_index = head_node->next[0];
@@ -256,7 +255,7 @@ namespace blackwidow {
       }
     }*/
     int node_key_len = node->key_len;
-    memcpy((char*)node, (char*)node + node->key_len + sizeof(SkipListNode),
+    std::memmove((char*)node, (char*)node + node->key_len + sizeof(SkipListNode),
     skip_list_manager_->cur_buf_index - ((char*)node - buffer + node->key_len + sizeof(SkipListNode)));
     // update member
     // skip_list_manager_->cur_buf_index = skip_list_manager_->cur_buf_index - (node->key_len + sizeof(SkipListNode));
@@ -323,7 +322,6 @@ namespace blackwidow {
       char *buffer = const_cast<char*>(skip_list_->buffer_str_->data() + skip_list_->prefix_);
       skip_list_manager_ = reinterpret_cast<SkipListManager*>(buffer);
       if (skip_list_manager_->count > 0) {
-        int cur_level_height = skip_list_manager_->cur_level;
         SkipListNode* cur_node = prev[0];
         if (cur_node == NULL || cur_node->next[0] == 0)
           return;
