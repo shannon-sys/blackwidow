@@ -1133,11 +1133,7 @@ Status RedisSets::Expire(const Slice& key, int32_t ttl) {
         vdb_->Put(WriteOptions(), handles_[1], {str,sizeof(int32_t)+key.size()}, "1" );
       }
     } else {
-<<<<<<< HEAD
       SkipList(&meta_value , SET_PREFIX_LENGTH , true);
-=======
-      SkipList skiplist = SkipList(&meta_value , SET_PREFIX_LENGTH , true);
->>>>>>> d54f98cc2b2596b4cb986217af7ca355827f49c0
       parsed_sets_meta_value.InitialMetaValue();
       s = vdb_->Put(WriteOptions(), handles_[0], key, meta_value);
     }
@@ -1159,11 +1155,7 @@ Status RedisSets::Del(const Slice& key) {
     } else if (parsed_sets_meta_value.count() == 0) {
       return Status::NotFound();
     } else {
-<<<<<<< HEAD
     SkipList(&meta_value, SET_PREFIX_LENGTH, true);
-=======
-    SkipList skiplist = SkipList(&meta_value, SET_PREFIX_LENGTH, true);
->>>>>>> d54f98cc2b2596b4cb986217af7ca355827f49c0
     parsed_sets_meta_value.InitialMetaValue();
     s = vdb_->Put(WriteOptions(), handles_[0], key, meta_value);
     }
@@ -1240,11 +1232,7 @@ Status RedisSets::Expireat(const Slice& key, int32_t timestamp) {
       memcpy(str + sizeof(int32_t) , key.data(),key.size());
       vdb_->Put(default_write_options_,handles_[1], {str,sizeof(int32_t)+key.size()}, "1" );
     } else {
-<<<<<<< HEAD
       SkipList(&meta_value, SET_PREFIX_LENGTH, true);
-=======
-      SkipList skiplist = SkipList(&meta_value, SET_PREFIX_LENGTH, true);
->>>>>>> d54f98cc2b2596b4cb986217af7ca355827f49c0
       parsed_sets_meta_value.InitialMetaValue();
     }
     s = vdb_->Put(default_write_options_, handles_[0], key, meta_value);
@@ -1402,10 +1390,6 @@ Status RedisSets::RealDelTimeout(BlackWidow * bw,std::string * key) {
       int64_t unix_time;
       shannon::Env::Default()->GetCurrentTime(&unix_time);
       if (parsed_set_meta_value.IsStale()) {
-<<<<<<< HEAD
-=======
-        // AddDelKey(bw, *key);
->>>>>>> d54f98cc2b2596b4cb986217af7ca355827f49c0
         s = vdb_->Delete(shannon::WriteOptions(), handles_[0], *key);
       }
     } else {
