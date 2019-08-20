@@ -943,7 +943,6 @@ Status RedisSets::SScan(const Slice& key, int64_t cursor, const std::string& pat
     } else {
       std::string sub_member;
       std::string start_point;
-      int32_t version = parsed_sets_meta_value.version();
       s = GetScanStartPoint(key, pattern, cursor, &start_point);
       if (s.IsNotFound()) {
         cursor = 0;
@@ -1134,7 +1133,7 @@ Status RedisSets::Expire(const Slice& key, int32_t ttl) {
         vdb_->Put(WriteOptions(), handles_[1], {str,sizeof(int32_t)+key.size()}, "1" );
       }
     } else {
-      SkipList skiplist = SkipList(&meta_value , SET_PREFIX_LENGTH , true);
+      SkipList(&meta_value , SET_PREFIX_LENGTH , true);
       parsed_sets_meta_value.InitialMetaValue();
       s = vdb_->Put(WriteOptions(), handles_[0], key, meta_value);
     }
@@ -1156,7 +1155,7 @@ Status RedisSets::Del(const Slice& key) {
     } else if (parsed_sets_meta_value.count() == 0) {
       return Status::NotFound();
     } else {
-    SkipList skiplist = SkipList(&meta_value, SET_PREFIX_LENGTH, true);
+    SkipList(&meta_value, SET_PREFIX_LENGTH, true);
     parsed_sets_meta_value.InitialMetaValue();
     s = vdb_->Put(WriteOptions(), handles_[0], key, meta_value);
     }
@@ -1233,7 +1232,7 @@ Status RedisSets::Expireat(const Slice& key, int32_t timestamp) {
       memcpy(str + sizeof(int32_t) , key.data(),key.size());
       vdb_->Put(default_write_options_,handles_[1], {str,sizeof(int32_t)+key.size()}, "1" );
     } else {
-      SkipList skiplist = SkipList(&meta_value, SET_PREFIX_LENGTH, true);
+      SkipList(&meta_value, SET_PREFIX_LENGTH, true);
       parsed_sets_meta_value.InitialMetaValue();
     }
     s = vdb_->Put(default_write_options_, handles_[0], key, meta_value);
@@ -1391,7 +1390,6 @@ Status RedisSets::RealDelTimeout(BlackWidow * bw,std::string * key) {
       int64_t unix_time;
       shannon::Env::Default()->GetCurrentTime(&unix_time);
       if (parsed_set_meta_value.IsStale()) {
-        // AddDelKey(bw, *key);
         s = vdb_->Delete(shannon::WriteOptions(), handles_[0], *key);
       }
     } else {
@@ -1409,14 +1407,6 @@ Status RedisSets::LogAdd(const Slice& key, const Slice& value,
       s = vdb_->Put(default_write_options_, cfh, key, value);
       if (!s.ok()) {
         return s;
-      }
-      if (cf_name == "default") {
-        unordered_map<std::string, std::string*>::iterator iter =
-            meta_infos_set_.find(key.ToString());
-        if (iter != meta_infos_set_.end()) {
-          delete iter->second;
-          meta_infos_set_.erase(key.ToString());
-        }
       }
       flag = true;
       break;
