@@ -103,6 +103,9 @@ class RedisSets : public Redis {
     BlackWidow::LRU<std::string, uint64_t> spop_counts_store_;
     Status ResetSpopCount(const std::string& key);
     Status AddAndGetSpopCount(const std::string& key, uint64_t* count);
+
+    const int SET_PREFIX_LENGTH = 12;
+    const int SET_RESERVE_LENGTH = 10240;
 };
 
 }  //  namespace blackwidow
