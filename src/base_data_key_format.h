@@ -119,20 +119,8 @@ class ParsedSetsMemberKey : public ParsedBaseDataKey {
     }
 };
 
-class ParsedZSetsMemberKey : public ParsedBaseDataKey {
-  public:
-    explicit ParsedZSetsMemberKey(const std::string* key)
-              : ParsedBaseDataKey(key) {}
-    explicit ParsedZSetsMemberKey(const Slice& key)
-              : ParsedBaseDataKey(key) {}
-    Slice member() {
-      return data_;
-    }
-};
-
 typedef BaseDataKey HashesDataKey;
 typedef BaseDataKey SetsMemberKey;
-typedef BaseDataKey ZSetsMemberKey;
 
 }  //  namespace blackwidow
 #endif  // SRC_BASE_DATA_KEY_FORMAT_H_

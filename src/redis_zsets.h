@@ -142,6 +142,7 @@ class RedisZSets : public Redis {
 
   private:
     std::vector<shannon::ColumnFamilyHandle*> handles_;
+    const int ZSET_PREFIX_LENGTH = 12;
 };
 
 } // namespace blackwidow

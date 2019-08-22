@@ -9,23 +9,28 @@
 namespace blackwidow {
 
 /*
- * |  <Key Size>  |      <Key>      | <Version> |  <Score>  |      <Member>      |
- *      4 Bytes      key size Bytes    4 Bytes     8 Bytes    member size Bytes
+ * |  <Score>  |      <Member>      |
+ *       8 Bytes    member size Bytes
  */
-class ZSetsScoreKey {
+class ZSetsKey {
  public:
-  ZSetsScoreKey(const Slice& key, int32_t version, double score, const Slice& member) :
-    start_(nullptr), key_(key), version_(version), score_(score), member_(member) {
+  ZSetsKey(double score, const Slice& member) :
+    start_(nullptr), score_(score), member_(member) {
   }
 
-  ~ZSetsScoreKey() {
+  ZSetsKey(const Slice& member, double score) :
+    start_(nullptr), score_(score), member_(member) {
+
+    }
+
+  ~ZSetsKey() {
     if (start_ != space_) {
       delete[] start_;
     }
   }
 
-  const Slice Encode() {
-    size_t needed = key_.size() + member_.size() + sizeof(int32_t) * 2 + sizeof(uint64_t);
+  const Slice EncodeMemberScore() {
+    size_t needed = member_.size() + sizeof(uint64_t);
     char* dst = nullptr;
     if (needed <= sizeof(space_)) {
       dst = space_;
@@ -38,18 +43,38 @@ class ZSetsScoreKey {
       }
     }
     start_ = dst;
-    EncodeFixed32(dst, key_.size());
-    dst += sizeof(int32_t);
-    memcpy(dst, key_.data(), key_.size());
-    dst += key_.size();
-    EncodeFixed32(dst, version_);
-    dst += sizeof(int32_t);
+    // encode member
+    memcpy(dst, member_.data(), member_.size());
+    dst += member_.size();
+    // encode score
     char tmp_score[8];
     EncodeDouble64Sort(tmp_score, score_);
     EncodeFixed64(dst, DecodeFixed64(tmp_score));
     dst += sizeof(uint64_t);
+    return Slice(start_, needed);
+  }
 
+  const Slice EncodeScoreMember() {
+    size_t needed = member_.size() + sizeof(uint64_t);
+    char* dst = nullptr;
+    if (needed <= sizeof(space_)) {
+      dst = space_;
+    } else {
+      dst = new char[needed];
+      // Need to allocate space, delete previous space
+      if (start_ != space_) {
+        delete[] start_;
+      }
+    }
+    start_ = dst;
+    // encode score
+    char tmp_score[8];
+    EncodeDouble64Sort(tmp_score, score_);
+    EncodeFixed64(dst, DecodeFixed64(tmp_score));
+    dst += sizeof(uint64_t);
+    // encode member
     memcpy(dst, member_.data(), member_.size());
+    dst += member_.size();
     return Slice(start_, needed);
   }
 
@@ -63,47 +88,26 @@ class ZSetsScoreKey {
 };
 
 
-class ParsedZSetsScoreKey {
+class ParsedZSetsMemberScore {
  public:
-  explicit ParsedZSetsScoreKey(const std::string* key) {
+  explicit ParsedZSetsMemberScore(const std::string* key) {
     const char* ptr = key->data();
-    int32_t key_len = DecodeFixed32(ptr);
-    ptr += sizeof(int32_t);
-    key_ = Slice(ptr, key_len);
-    ptr += key_len;
-    version_ = DecodeFixed32(ptr);
-    ptr += sizeof(int32_t);
-
+    member_ = Slice(ptr, key->size() - sizeof(uint64_t));
+    ptr = ptr + key->size() - sizeof(uint64_t);
     uint64_t tmp = DecodeFixed64(ptr);
     const void* ptr_tmp = reinterpret_cast<const void*>(&tmp);
     DecodeDouble64Sort(reinterpret_cast<const char *>(ptr_tmp), &score_);
-    ptr += sizeof(uint64_t);
-    member_ = Slice(ptr, key->size() - key_len - 2 * sizeof(int32_t) - sizeof(uint64_t));
   }
 
-  explicit ParsedZSetsScoreKey(const Slice& key) {
+  explicit ParsedZSetsMemberScore(const Slice& key) {
     const char* ptr = key.data();
-    int32_t key_len = DecodeFixed32(ptr);
-    ptr += sizeof(int32_t);
-    key_ = Slice(ptr, key_len);
-    ptr += key_len;
-    version_ = DecodeFixed32(ptr);
-    ptr += sizeof(int32_t);
-
+    member_ = Slice(ptr, key.size() - sizeof(uint64_t));
+    ptr = ptr + key.size() - sizeof(uint64_t);
     uint64_t tmp = DecodeFixed64(ptr);
     const void* ptr_tmp = reinterpret_cast<const void*>(&tmp);
-    // score_ = *reinterpret_cast<const double*>(ptr_tmp);
     DecodeDouble64Sort(reinterpret_cast<const char *>(ptr_tmp), &score_);
-    ptr += sizeof(uint64_t);
-    member_ = Slice(ptr, key.size() - key_len - 2 * sizeof(int32_t) - sizeof(uint64_t));
   }
 
-  Slice key() {
-    return key_;
-  }
-  int32_t version() const {
-    return version_;
-  }
   double score() const {
     return score_;
   }
@@ -112,8 +116,38 @@ class ParsedZSetsScoreKey {
   }
 
  private:
-  Slice key_;
-  int32_t version_;
+  double score_;
+  Slice member_;
+};
+
+class ParsedZSetsScoreMember {
+ public:
+  explicit ParsedZSetsScoreMember(const std::string* key) {
+    const char* ptr = key->data();
+    uint64_t tmp = DecodeFixed64(ptr);
+    const void* ptr_tmp = reinterpret_cast<const void*>(&tmp);
+    DecodeDouble64Sort(reinterpret_cast<const char *>(ptr_tmp), &score_);
+    ptr += sizeof(uint64_t);
+    member_ = Slice(ptr, key->size() - sizeof(uint64_t));
+  }
+
+  explicit ParsedZSetsScoreMember(const Slice& key) {
+    const char* ptr = key.data();
+    uint64_t tmp = DecodeFixed64(ptr);
+    const void* ptr_tmp = reinterpret_cast<const void*>(&tmp);
+    DecodeDouble64Sort(reinterpret_cast<const char *>(ptr_tmp), &score_);
+    ptr += sizeof(uint64_t);
+    member_ = Slice(ptr, key.size() - sizeof(uint64_t));
+  }
+
+  double score() const {
+    return score_;
+  }
+  Slice member() {
+    return member_;
+  }
+
+ private:
   double score_;
   Slice member_;
 };
