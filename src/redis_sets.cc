@@ -1323,29 +1323,27 @@ void RedisSets::ScanDatabase() {
       survival_time = parsed_sets_meta_value.timestamp() - current_time > 0 ?
         parsed_sets_meta_value.timestamp() - current_time : -1;
     }
-
     printf("[key : %-30s] [count : %-10d] [timestamp : %-10d] [version : %d] [survival_time : %d]\n",
            meta_iter->key().ToString().c_str(),
            parsed_sets_meta_value.count(),
            parsed_sets_meta_value.timestamp(),
            parsed_sets_meta_value.version(),
            survival_time);
+    std::string data_value = meta_iter->value().ToString();
+    SkipList skiplist = SkipList( &data_value , SET_PREFIX_LENGTH , false );
+    auto member_iter = skiplist.NewIterator();
+    for (member_iter->SeekToFirst();
+      member_iter->Valid();
+      member_iter->Next()) {
+      ParsedSetsMemberKey parsed_sets_member_key(member_iter->key());
+      printf("[key : %-30s] [member : %-20s] [version : %d]\n",
+      meta_iter->key().ToString().c_str(),
+      member_iter->key().ToString().c_str(),
+      parsed_sets_meta_value.version());
+    }
+    delete member_iter;
   }
   delete meta_iter;
-
-  printf("\n***************Sets Member Data***************\n");
-  iterator_options.only_read_key = true;
-  auto member_iter = db_->NewIterator(iterator_options, handles_[1]);
-  for (member_iter->SeekToFirst();
-       member_iter->Valid();
-       member_iter->Next()) {
-    ParsedSetsMemberKey parsed_sets_member_key(member_iter->key());
-    printf("[key : %-30s] [member : %-20s] [version : %d]\n",
-           parsed_sets_member_key.key().ToString().c_str(),
-           parsed_sets_member_key.member().ToString().c_str(),
-           parsed_sets_member_key.version());
-  }
-  delete member_iter;
 }
 
 Status RedisSets::DelTimeout(BlackWidow * bw,std::string * key) {
