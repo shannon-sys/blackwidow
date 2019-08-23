@@ -51,9 +51,8 @@ Status RedisSets::Open(const BlackwidowOptions& bw_options,
   Status s = shannon::DB::Open(ops, db_path, default_device_name_, &db_);
   if (s.ok()) {
     // create column family
-    shannon::ColumnFamilyHandle* cf ,*tcf;
+    shannon::ColumnFamilyHandle* tcf;
     shannon::ColumnFamilyOptions cfo;
-    s = db_->CreateColumnFamily(cfo, "member_cf", &cf);
     if (!s.ok()) {
       return s;
     }
@@ -63,7 +62,6 @@ Status RedisSets::Open(const BlackwidowOptions& bw_options,
       return s;
     }
     // close DB
-    delete cf;
     delete tcf;
     delete db_;
   }
@@ -71,21 +69,16 @@ Status RedisSets::Open(const BlackwidowOptions& bw_options,
   // Open
   shannon::DBOptions db_ops(bw_options.options);
   shannon::ColumnFamilyOptions meta_cf_ops(bw_options.options);
-  shannon::ColumnFamilyOptions member_cf_ops(bw_options.options);
   shannon::ColumnFamilyOptions timeout_cf_ops(bw_options.options);
   meta_cf_ops.compaction_filter_factory =
       std::make_shared<SetsMetaFilterFactory>();
-  member_cf_ops.compaction_filter_factory =
-      std::make_shared<SetsMemberFilterFactory>(&db_, &handles_);
 
   //use the bloom filter policy to reduce disk reads
   std::vector<shannon::ColumnFamilyDescriptor> column_families;
   // Meta CF
   column_families.push_back(shannon::ColumnFamilyDescriptor(
       shannon::kDefaultColumnFamilyName, meta_cf_ops));
-  // Member CF
-  column_families.push_back(shannon::ColumnFamilyDescriptor(
-      "member_cf", member_cf_ops));
+      
   column_families.push_back(shannon::ColumnFamilyDescriptor(
       "timeout_cf", shannon::ColumnFamilyOptions()));
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
