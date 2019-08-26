@@ -50,12 +50,6 @@ namespace blackwidow {
           }
       };
 
-      /*
-      SkipList() {
-        this->buffer_ = new char[MAX_SKIPLIST_BUF];
-        this->buffer_len_ = MAX_SKIPLIST_BUF;
-        init();
-      }*/
       SkipList(std::string* buffer_str, int prefix = 0, bool is_init = false) {
         if (buffer_str != NULL) {
           buffer_str_ = buffer_str;
@@ -88,7 +82,6 @@ namespace blackwidow {
       }
       this->buffer_str_->resize(prefix_ + sizeof(SkipListManager));
       skip_list_manager_ = reinterpret_cast<SkipListManager*>(const_cast<char*>(this->buffer_str_->data() + prefix_));
-      //
       skip_list_manager_->count = 0;
       skip_list_manager_->cur_level = 0;
       skip_list_manager_->cur_buf_index = sizeof(SkipListManager);
@@ -115,8 +108,6 @@ namespace blackwidow {
     int kbranching_;
     int max_level_;
     SkipListManager *skip_list_manager_;
-    // char *buffer_;
-    // unsigned int buffer_len_;
     std::string* buffer_str_;
     int prefix_;
     std::default_random_engine random_engine_;
