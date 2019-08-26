@@ -259,8 +259,10 @@ Status RedisZSets::ZAdd(const Slice& key,
     assert(skiplist_member_score.count() == parsed_zsets_meta_value.count() + cnt);
     parsed_zsets_meta_value.ModifyCount(cnt);
     memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
-    batch.Put(handles_[0], key, meta_value);
-    batch.Put(handles_[1], key, score_value);
+    // batch.Put(handles_[0], key, meta_value);
+    // batch.Put(handles_[1], key, score_value);
+    vdb_->Put(default_write_options_, handles_[0], key, meta_value);
+    vdb_->Put(default_write_options_, handles_[1], key, score_value);
     *ret = cnt;
   } else {
     SkipList skiplist_member_score(&meta_value, ZSET_PREFIX_LENGTH, true);
@@ -276,11 +278,11 @@ Status RedisZSets::ZAdd(const Slice& key,
     parsed_zsets_meta_value.set_count(skiplist_member_score.count());
     memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
     assert(skiplist_member_score.count() == parsed_zsets_meta_value.count());
-    batch.Put(handles_[0], key, meta_value);
-    batch.Put(handles_[1], key, score_value);
+    vdb_->Put(default_write_options_, handles_[0], key, meta_value);
+    vdb_->Put(default_write_options_, handles_[1], key, score_value);
     *ret = filtered_score_members.size();
   }
-  s = vdb_->Write(default_write_options_, &batch);
+  // s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   return s;
 }
@@ -656,13 +658,15 @@ Status RedisZSets::ZRem(const Slice& key,
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
       assert(parsed_zsets_meta_value.count() == skiplist_meta.count());
       memcpy(const_cast<char*>(score_value.data()), meta_value.data(), ZSET_PREFIX_LENGTH);
-      batch.Put(handles_[0], key, meta_value);
-      batch.Put(handles_[1], key, score_value);
+      // batch.Put(handles_[0], key, meta_value);
+      // batch.Put(handles_[1], key, score_value);
+      vdb_->Put(default_write_options_, handles_[0], key, meta_value);
+      vdb_->Put(default_write_options_, handles_[1], key, score_value);
     }
   } else {
     return Status::NotFound();
   }
-  s = vdb_->Write(default_write_options_, &batch);
+  // s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   return s;
 }
