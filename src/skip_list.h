@@ -58,6 +58,9 @@ namespace blackwidow {
             init();
           skip_list_manager_ = reinterpret_cast<SkipListManager*>(const_cast<char*>(this->buffer_str_->data() + prefix_));
         }
+        max_level_ = MAX_SKIPLIST_LEVEL;
+        kbranching_ = 4;
+        random_engine_.seed(get_timestamp());
       }
       Iterator* NewIterator() {
         this->skip_list_manager_ = reinterpret_cast<SkipListManager*>(const_cast<char*>(this->buffer_str_->data() + prefix_));
@@ -88,9 +91,6 @@ namespace blackwidow {
       memset(skip_list_manager_->head[0].next, 0, sizeof(int)*MAX_SKIPLIST_LEVEL);
       skip_list_manager_->head[0].key_len = 0;
       skip_list_manager_->head[0].prev = sizeof(SkipListManager) - sizeof(SkipListNode);
-      max_level_ = MAX_SKIPLIST_LEVEL;
-      kbranching_ = 4;
-      random_engine_.seed(get_timestamp());
     }
     int random_height() {
       int height = 1;
