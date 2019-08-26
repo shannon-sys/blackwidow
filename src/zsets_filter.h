@@ -24,7 +24,7 @@ class ZSetsScoreFilter : public shannon::CompactionFilter {
   virtual bool Filter(int level, const shannon::Slice& key,
                       const shannon::Slice& value,
                       std::string* new_value, bool* value_changed) const override {
-    ParsedZSetsScoreKey parsed_zsets_score_key(key);
+    /*ParsedZSetsScoreKey parsed_zsets_score_key(key);
     Trace("==========================START==========================");
     Trace("[ScoreFilter], key: %s, score = %lf, member = %s, version = %d",
           parsed_zsets_score_key.key().ToString().c_str(),
@@ -73,6 +73,8 @@ class ZSetsScoreFilter : public shannon::CompactionFilter {
       Trace("Reserve[score_key_version == cur_meta_version]");
       return false;
     }
+    */
+    return true;
   }
 
   virtual const char* Name() const override { return "ZSetsScoreFilter";}
