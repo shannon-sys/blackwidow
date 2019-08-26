@@ -108,6 +108,7 @@ namespace blackwidow {
       }
     }
   }
+
   SkipList::SkipListNode* SkipList::find(const shannon::Slice& key, SkipList::SkipListNode* prev[]) {
     assert(buffer_str_);
     assert(buffer_str_->size() >= sizeof(SkipListManager));
@@ -142,6 +143,7 @@ namespace blackwidow {
     }
     return NULL;
   }
+
   bool SkipList::insert(const shannon::Slice& key) {
     SkipListNode *prev[MAX_SKIPLIST_LEVEL];
     this->buffer_str_->append(sizeof(SkipListNode) + key.size(), ' ');
@@ -207,7 +209,7 @@ namespace blackwidow {
       SkipListNode* next_node = reinterpret_cast<SkipListNode*>(buffer + node->next[0]);
       assert(next_node->prev == ((char*)node - buffer));
       next_node->prev = node->prev;
-    } 
+    }
     // chagnge head prev pointer
     if (skip_list_manager_->head[0].prev == (char*)node - buffer) {
       skip_list_manager_->head[0].prev = node->prev;
@@ -234,7 +236,7 @@ namespace blackwidow {
         if (head_node->next[i] == cur_node_offset) {
           head_node->next[i] = node->next[i];
         }
-        // if current->next > cur_node_offset 
+        // if current->next > cur_node_offset
         // then change next offset substract current node size
         if (head_node->next[i] > cur_node_offset) {
           head_node->next[i] = head_node->next[i] - node->key_len - sizeof(SkipListNode);
@@ -251,7 +253,7 @@ namespace blackwidow {
       if (skip_list_manager_->end_node_position > cur_node_offset) {
         skip_list_manager_->end_node_position = skip_list_manager_->end_node_position -(node->key_len + sizeof(SkipListNode));
       } else (skip_list_manager_->end_node_position == cur_node_offset) {
-        
+
       }
     }*/
     int node_key_len = node->key_len;

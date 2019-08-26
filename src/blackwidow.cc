@@ -46,18 +46,20 @@ BlackWidow::BlackWidow() :
 }
 
 BlackWidow::~BlackWidow() {
-
+  std::cout<<"11111111"<<std::endl;
   bg_tasks_should_exit_ = true;
   bg_tasks_cond_var_.Signal();
-
   int ret = 0;
+  std::cout<<"22222222"<<std::endl;
   if ((ret = pthread_join(bg_tasks_thread_id_, NULL)) != 0) {
     fprintf (stderr, "pthread_join failed with bgtask thread error %d\n", ret);
   }
+  std::cout<<"33333333"<<std::endl;
   ret = 0;
   if ((ret = pthread_join(del_tasks_thread_id_, NULL)) != 0) {
     fprintf (stderr, "pthread_join failed with bgtask thread error %d\n", ret);
   }
+  std::cout<<"44444444"<<std::endl;
   delete strings_db_;
   delete hashes_db_;
   delete sets_db_;
