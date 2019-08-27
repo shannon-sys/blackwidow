@@ -238,12 +238,101 @@ class ParsedZSetsMetaValue : public ParsedInternalValue {
 };
 
 
+class ParsedSetsMetaValue : public ParsedInternalValue {
+ public:
+  // Use this constructor after shannon::DB::Get();
+  explicit ParsedSetsMetaValue(std::string* internal_value_str) :
+    ParsedInternalValue(internal_value_str) {
+    if (internal_value_str->size() >= kBaseSetsValueSuffixLength) {
+      user_value_ = Slice(internal_value_str->data(),
+          internal_value_str->size() - kBaseSetsValueSuffixLength);
+      version_ = DecodeFixed32(internal_value_str->data() + sizeof(int32_t) );
+      timestamp_ = DecodeFixed32(internal_value_str->data() +  sizeof(int32_t) * 2 );
+    }
+    count_ = DecodeFixed32(internal_value_str->data());
+  }
+
+  // Use this constructor in shannon::CompactionFilter::Filter();
+  explicit ParsedSetsMetaValue(const Slice& internal_value_slice) :
+    ParsedInternalValue(internal_value_slice) {
+    if (internal_value_slice.size() >= kBaseSetsValueSuffixLength) {
+      user_value_ = Slice(internal_value_slice.data(),
+          internal_value_slice.size() - kBaseSetsValueSuffixLength);
+      version_ = DecodeFixed32(internal_value_slice.data() + sizeof(int32_t) );
+      timestamp_ = DecodeFixed32(internal_value_slice.data() + sizeof(int32_t) * 2 );
+    }
+    count_ = DecodeFixed32(internal_value_slice.data());
+  }
+
+  virtual void StripSuffix() override {
+    if (value_ != nullptr) {
+      value_->erase(value_->size() ,
+          kBaseSetsValueSuffixLength);
+    }
+  }
+
+  virtual void SetVersionToValue() override {
+    if (value_ != nullptr) {
+      char* dst = const_cast<char*>(value_->data()) + sizeof(int32_t);
+      EncodeFixed32(dst, version_);
+    }
+  }
+
+  virtual void SetTimestampToValue() override {
+    if (value_ != nullptr) {
+      char* dst = const_cast<char*>(value_->data()) + sizeof(int32_t) * 2 ;
+      EncodeFixed32(dst, timestamp_);
+    }
+  }
+  static const size_t kBaseSetsValueSuffixLength = 3 * sizeof(int32_t);
+
+  int32_t InitialMetaValue() {
+    this->set_count(0);
+    this->set_timestamp(0);
+    return this->UpdateVersion();
+  }
+
+  int32_t count() {
+    return count_;
+  }
+
+  void set_count(int32_t count) {
+    count_ = count;
+    if (value_ != nullptr) {
+      char* dst = const_cast<char*>(value_->data());
+      EncodeFixed32(dst, count_);
+    }
+  }
+
+  void ModifyCount(int32_t delta) {
+    count_ += delta;
+    if (value_ != nullptr) {
+      char* dst = const_cast<char*>(value_->data());
+      EncodeFixed32(dst, count_);
+    }
+  }
+
+  int32_t UpdateVersion() {
+    int64_t unix_time;
+    shannon::Env::Default()->GetCurrentTime(&unix_time);
+    if (version_ >= static_cast<int32_t>(unix_time)) {
+      version_++;
+    } else {
+      version_ = static_cast<int32_t>(unix_time);
+    }
+    SetVersionToValue();
+    return version_;
+  }
+
+ private:
+  int32_t count_;
+};
+
 typedef BaseMetaValue HashesMetaValue;
 typedef ParsedBaseMetaValue ParsedHashesMetaValue;
 typedef BaseMetaValue SetsMetaValue;
-typedef ParsedBaseMetaValue ParsedSetsMetaValue;
-typedef BaseMetaValue ZSetsMetaValue;
-typedef ParsedBaseMetaValue ParsedZSetsMetaValue;
+
+
 
 }  //  namespace blackwidow
 #endif  // SRC_BASE_META_VALUE_FORMAT_H_
