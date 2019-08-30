@@ -220,7 +220,7 @@ void show_meta_info() {
     std::cout<<"count:"<<count<<"total size:"<<total_size<<"B "<<(total_size/1024)<<"k "<<(total_size/1024/1024)<<"M"<<std::endl;
 }
 
-Status RedisLists::LIndex(const Slice& key, int64_t index, std::string* element) {  
+Status RedisLists::LIndex(const Slice& key, int64_t index, std::string* element) {
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot;
 
@@ -1395,12 +1395,8 @@ Status RedisLists::RealDelTimeout(BlackWidow * bw,std::string * key) {
     Status s = Status::OK();
     ScopeRecordLock l(lock_mgr_, *key);
     std::string meta_value;
-    std::unordered_map<std::string, std::string *>::iterator meta_info =
-        meta_infos_list_.find(*key);
-        cout << *key ;
-    if (meta_info != meta_infos_list_.end()) {
-      meta_value.resize(meta_info->second->size());
-      memcpy(const_cast<char *>(meta_value.data()), meta_info->second->data(), meta_info->second->size());
+    s = db_->Get(default_read_options_, handles_[0], *key, &meta_value);
+    if (s.ok()) {
       ParsedListsMetaValue parsed_lists_meta_value(&meta_value);
       int64_t unix_time;
       shannon::Env::Default()->GetCurrentTime(&unix_time);
@@ -1408,7 +1404,6 @@ Status RedisLists::RealDelTimeout(BlackWidow * bw,std::string * key) {
       {
         AddDelKey(bw, *key);
         s = vdb_->Delete(shannon::WriteOptions(), handles_[0], *key);
-        delete meta_info->second;
         meta_infos_list_.erase(*key);
       }
     }
