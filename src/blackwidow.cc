@@ -852,7 +852,7 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
     if ( 0==key.length() ||  nullptr==column_family_handle) {
         return Status::NotFound("nullptr");
     }
-    if (!is_slave_) {
+    if (is_slave_) {
       return Status::Aborted("is slave");
     }
     quelock_.lock();
