@@ -18,6 +18,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <queue>
+#include <sys/time.h>
 
 namespace blackwidow {
 
@@ -579,10 +580,31 @@ Status BlackWidow::RPoplpush(const Slice& source,
   return lists_db_->RPoplpush(source, destination, element);
 }
 
+int64_t get_time4() {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return tv.tv_sec * 1000000 + tv.tv_usec;
+}
+uint64_t g_iops = 0, g_start_time = 0, g_end_time = 0;
+uint64_t g_delay_time = 2000000;
+int64_t g_avg_time = 0;
 Status BlackWidow::ZAdd(const Slice& key,
                         const std::vector<ScoreMember>& score_members,
                         int32_t* ret) {
-  return zsets_db_->ZAdd(key, score_members, ret);
+  int64_t s_t, e_t;
+  s_t = get_time4();
+  Status s = zsets_db_->ZAdd(key, score_members, ret);
+  e_t = get_time4();
+  g_iops ++;
+  g_avg_time += (e_t - s_t);
+  g_end_time = get_time4();
+  if (g_start_time + g_delay_time <= g_end_time) {
+    printf("blackwidow iops:%-8d average latency:%-8dus\n", g_iops * 1000000 / g_delay_time, g_avg_time / g_iops);
+    g_iops = 0;
+    g_avg_time = 0;
+    g_start_time = g_end_time;
+  }
+  return s;
 }
 
 Status BlackWidow::ZCard(const Slice& key,

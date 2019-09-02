@@ -16,6 +16,8 @@
 #include "src/scope_snapshot.h"
 #include "src/unordered_map_cache_lock.h"
 #include "src/skip_list.h"
+#include <sys/time.h>
+#include <unistd.h>
 
 using namespace std;
 #define assert(x) { if (x) {} else { \
@@ -185,11 +187,28 @@ Status RedisZSets::ScanKeys(const std::string& pattern,
   return Status::OK();
 }
 
+uint64_t get_time3() {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return tv.tv_sec * 1000000 + tv.tv_usec;
+}
+
+int64_t iops_start_time = 0, iops_end_time = 0;
+int64_t iops = 0;
+int64_t statistics_time = 500000; // 500ms
+slash::Mutex iops_mutex_;
+uint64_t g_get_time = 0, g_write_time = 0, g_total_time = 0, g_total_time_2 = 0;
+uint64_t g_total_lock_time = 0;
+
+
 Status RedisZSets::ZAdd(const Slice& key,
                         const std::vector<ScoreMember>& score_members,
                         int32_t* ret) {
   *ret = 0;
+  uint64_t s_t, e_t, s_t_2, e_t_2;
+  uint64_t lst, let;
   uint32_t statistic = 0;
+  s_t = get_time3();
   std::unordered_set<std::string> unique;
   std::vector<ScoreMember> filtered_score_members;
   for (const auto& sm : score_members) {
@@ -201,15 +220,27 @@ Status RedisZSets::ZAdd(const Slice& key,
 
   std::string meta_value;
   std::string score_value;
-  VWriteBatch batch;
+  lst = get_time3();
+  shannon::WriteBatch batch;
+  let = get_time3();
   ScopeRecordLock l(lock_mgr_, key);
+  g_total_lock_time += (let - lst);
   Status s;
+  s_t_2 = get_time3();
+  uint64_t start_time, end_time;
+  uint64_t get_time = 0, write_time = 0, total_time = 0;
+  start_time = get_time3();
   // get meta value
   s = db_->Get(shannon::ReadOptions(), handles_[0], key, &meta_value);
+  end_time = get_time3();
+  get_time = (end_time - start_time);
   if (s.ok()) {
     // get score value
     s = db_->Get(shannon::ReadOptions(), handles_[1], key, &score_value);
     assert(s.ok());
+    end_time = get_time3();
+    get_time = (end_time - start_time);
+
     bool valid = true;
     ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()
@@ -259,8 +290,10 @@ Status RedisZSets::ZAdd(const Slice& key,
     assert(skiplist_member_score.count() == parsed_zsets_meta_value.count() + cnt);
     parsed_zsets_meta_value.ModifyCount(cnt);
     memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
-    batch.Put(handles_[0], key, meta_value);
-    batch.Put(handles_[1], key, score_value);
+    // batch.Put(handles_[0], key, meta_value);
+    // batch.Put(handles_[1], key, score_value);
+    db_->Put(default_write_options_, handles_[0], key, meta_value);
+    db_->Put(default_write_options_, handles_[1], key, score_value);
     *ret = cnt;
   } else {
     SkipList skiplist_member_score(&meta_value, ZSET_PREFIX_LENGTH, true);
@@ -276,12 +309,41 @@ Status RedisZSets::ZAdd(const Slice& key,
     parsed_zsets_meta_value.set_count(skiplist_member_score.count());
     memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
     assert(skiplist_member_score.count() == parsed_zsets_meta_value.count());
-    batch.Put(handles_[0], key, meta_value);
-    batch.Put(handles_[1], key, score_value);
+    // batch.Put(handles_[0], key, meta_value);
+    // batch.Put(handles_[1], key, score_value);
+    db_->Put(default_write_options_, handles_[0], key, meta_value);
+    db_->Put(default_write_options_, handles_[1], key, score_value);
     *ret = filtered_score_members.size();
   }
-  s = vdb_->Write(default_write_options_, &batch);
-  UpdateSpecificKeyStatistics(key.ToString(), statistic);
+  start_time = get_time3();
+  // s = db_->Write(default_write_options_, &batch);
+  end_time = get_time3();
+  write_time = (end_time - start_time);
+  e_t = get_time3();
+  e_t_2 = get_time3();
+  total_time = (e_t - s_t);
+  // UpdateSpecificKeyStatistics(key.ToString(), statistic);
+  iops_mutex_.Lock();
+  g_get_time += get_time;
+  g_write_time += write_time;
+  g_total_time += total_time;
+  g_total_time_2 += (e_t_2 - s_t_2);
+  iops ++;
+  iops_end_time = get_time3();
+  if (iops_end_time >= iops_start_time + statistics_time) {
+    int real_iops = (int64_t)(iops * (double)1000000 / (double)statistics_time);
+    // if (real_iops <= 10000) {
+      printf("get time:%-8d write_time:%-8d total_time:%-8d total_time2:%-8d lock time:%-8d iops:%-8d\n", g_get_time/iops, g_write_time/iops, g_total_time/iops, g_total_time_2/iops, g_total_lock_time/iops, real_iops);
+    // }
+    iops = 0;
+    iops_start_time = iops_end_time;
+    g_get_time = 0;
+    g_write_time = 0;
+    g_total_time = 0;
+    g_total_time_2 = 0;
+    g_total_lock_time = 0;
+  }
+  iops_mutex_.Unlock();
   return s;
 }
 
