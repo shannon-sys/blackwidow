@@ -11,8 +11,46 @@
 #include "src/redis.h"
 #include "src/custom_comparator.h"
 #include "blackwidow/blackwidow.h"
+#include <stdlib.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <limits>
+#include <unordered_map>
+#include <sys/time.h>
 
 namespace blackwidow {
+static int64_t count =0;
+static int64_t tottime =0;
+static int64_t totnum =0;
+static std::mutex mtx;
+class PrintTimeSpend{
+ public:
+  PrintTimeSpend(std::string str ):name_(str) {
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    time_ = tv.tv_sec*1000000 + tv.tv_usec;
+  }
+  ~PrintTimeSpend() {
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    int64_t timenow = tv.tv_sec*1000000 + tv.tv_usec;
+    mtx.lock(); 
+    totnum ++ ;
+    tottime += timenow - time_;
+    if (timenow - time_ > 20) {
+      count ++;
+      if (count%100 == 0) {
+        printf("tl_time:%lld  tl_count:%lld  ave:%lld/%lld = %f \n" ,timenow - time_, count ,tottime,totnum, float((tottime+0.0)/totnum) );
+        tottime = 0;
+        totnum = 1;
+      }
+    }
+    mtx.unlock();
+  }
+ private:
+  std::string name_ ;
+  int64_t time_;
+};
 
 class RedisZSets : public Redis {
   public:
@@ -139,8 +177,21 @@ class RedisZSets : public Redis {
     virtual Status LogDelete(const Slice& key, const std::string& cf_name) override;
     // Iterate all data
     void ScanDatabase();
-
+    VWriteBatch* get_batch(const long long pid ) {
+      PrintTimeSpend("batch");
+      auto iterator = write_batch_map.find(pid);
+      if (iterator != write_batch_map.end()) {
+        iterator->second->Clear();
+        return  iterator->second;
+      } else {
+        VWriteBatch* batch = new VWriteBatch();
+        write_batch_map.insert(pair<long long, VWriteBatch*>(pid,batch));
+        cout << "-------------------"<<endl;
+        return batch ;
+      }
+    }
   private:
+    unordered_map<long long, VWriteBatch*> write_batch_map;
     std::vector<shannon::ColumnFamilyHandle*> handles_;
     const int ZSET_PREFIX_LENGTH = 12;
 };

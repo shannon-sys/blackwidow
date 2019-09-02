@@ -8,6 +8,7 @@
 
 #include <limits>
 #include <unordered_map>
+#include <sys/time.h>
 
 #include <iostream>
 #include "blackwidow/util.h"
@@ -18,6 +19,8 @@
 #include "src/skip_list.h"
 
 using namespace std;
+
+
 #define assert(x) { if (x) {} else { \
             printf("file:%s str:%s line:%d\n", __FILE__, __STRING(x), __LINE__); \
             exit(-1); \
@@ -35,6 +38,13 @@ shannon::Comparator* ZSetsScoreKeyComparator() {
 RedisZSets::~RedisZSets() {
   std::vector<shannon::ColumnFamilyHandle*> tmp_handles = handles_;
   handles_.clear();
+  for (std::unordered_map<long long, VWriteBatch*>::iterator iter =
+      write_batch_map.begin(); iter != write_batch_map.end();
+      ++ iter) {
+    delete iter->second;
+  }
+  write_batch_map.clear();
+
   for (auto handle : tmp_handles) {
     delete handle;
   }
@@ -201,7 +211,7 @@ Status RedisZSets::ZAdd(const Slice& key,
 
   std::string meta_value;
   std::string score_value;
-  VWriteBatch batch;
+  VWriteBatch* batch =  get_batch(pthread_self());
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
   // get meta value
@@ -259,8 +269,8 @@ Status RedisZSets::ZAdd(const Slice& key,
     assert(skiplist_member_score.count() == parsed_zsets_meta_value.count() + cnt);
     parsed_zsets_meta_value.ModifyCount(cnt);
     memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
-    batch.Put(handles_[0], key, meta_value);
-    batch.Put(handles_[1], key, score_value);
+    batch->Put(handles_[0], key, meta_value);
+    batch->Put(handles_[1], key, score_value);
     *ret = cnt;
   } else {
     SkipList skiplist_member_score(&meta_value, ZSET_PREFIX_LENGTH, true);
@@ -276,11 +286,14 @@ Status RedisZSets::ZAdd(const Slice& key,
     parsed_zsets_meta_value.set_count(skiplist_member_score.count());
     memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
     assert(skiplist_member_score.count() == parsed_zsets_meta_value.count());
-    batch.Put(handles_[0], key, meta_value);
-    batch.Put(handles_[1], key, score_value);
+    batch->Put(handles_[0], key, meta_value);
+    batch->Put(handles_[1], key, score_value);
     *ret = filtered_score_members.size();
   }
-  s = vdb_->Write(default_write_options_, &batch);
+  
+  {
+  s = vdb_->Write(default_write_options_, batch);
+  }
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   return s;
 }
@@ -375,7 +388,7 @@ Status RedisZSets::ZIncrby(const Slice& key,
   double score = 0;
   std::string meta_value;
   std::string score_value;
-  VWriteBatch batch;
+  VWriteBatch* batch =  get_batch(pthread_self());
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
   s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
@@ -427,10 +440,12 @@ Status RedisZSets::ZIncrby(const Slice& key,
     score = increment;
   }
   memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
-  batch.Put(handles_[0], key, meta_value);
-  batch.Put(handles_[1], key, score_value);
+  batch->Put(handles_[0], key, meta_value);
+  batch->Put(handles_[1], key, score_value);
   *ret = score;
-  s = vdb_->Write(default_write_options_, &batch);
+  {
+  s = vdb_->Write(default_write_options_, batch);
+  }
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   return s;
 }
@@ -613,7 +628,7 @@ Status RedisZSets::ZRem(const Slice& key,
 
   std::string meta_value;
   std::string score_value;
-  VWriteBatch batch;
+  VWriteBatch* batch =  get_batch(pthread_self());
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
 
@@ -656,13 +671,15 @@ Status RedisZSets::ZRem(const Slice& key,
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
       assert(parsed_zsets_meta_value.count() == skiplist_meta.count());
       memcpy(const_cast<char*>(score_value.data()), meta_value.data(), ZSET_PREFIX_LENGTH);
-      batch.Put(handles_[0], key, meta_value);
-      batch.Put(handles_[1], key, score_value);
+      batch->Put(handles_[0], key, meta_value);
+      batch->Put(handles_[1], key, score_value);
     }
   } else {
     return Status::NotFound();
   }
-  s = vdb_->Write(default_write_options_, &batch);
+  {
+  s = vdb_->Write(default_write_options_, batch);
+  }
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   return s;
 }
@@ -675,7 +692,7 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
   uint32_t statistic = 0;
   std::string score_value;
   std::string meta_value;
-  VWriteBatch batch;
+  VWriteBatch* batch =  get_batch(pthread_self());
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
 
@@ -725,9 +742,12 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
       *ret = del_cnt;
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
       memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
-      batch.Put(handles_[0], key, meta_value);
-      batch.Put(handles_[1], key, score_value);
-      s = vdb_->Write(default_write_options_, &batch);
+      batch->Put(handles_[0], key, meta_value);
+      batch->Put(handles_[1], key, score_value);
+      {
+  
+      s = vdb_->Write(default_write_options_, batch);
+      }
     }
   } else {
     return Status::NotFound();
@@ -746,7 +766,7 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
   uint32_t statistic = 0;
   std::string score_value;
   std::string meta_value;
-  VWriteBatch batch;
+  VWriteBatch* batch =  get_batch(pthread_self());
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
 
@@ -804,13 +824,15 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
       }
       *ret = del_cnt;
       memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
-      batch.Put(handles_[0], key, meta_value);
-      batch.Put(handles_[1], key, score_value);
+      batch->Put(handles_[0], key, meta_value);
+      batch->Put(handles_[1], key, score_value);
     }
   } else {
     return Status::NotFound();
   }
-  s = vdb_->Write(default_write_options_, &batch);
+  {
+  s = vdb_->Write(default_write_options_, batch);
+  }
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   return s;
 }
@@ -1016,7 +1038,7 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
                                int32_t* ret) {
   *ret = 0;
   uint32_t statistic = 0;
-  VWriteBatch batch;
+  VWriteBatch* batch =  get_batch(pthread_self());
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot = nullptr;
 
@@ -1082,9 +1104,11 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
   parsed_zsets_meta_value.set_count(skiplist_member_score.count());
   memcpy(const_cast<char*>(destina_score_value.data()), const_cast<char*>(destina_meta_value.data()), ZSET_PREFIX_LENGTH);
   *ret = member_score_map.size();
-  batch.Put(handles_[0], destination, destina_meta_value);
-  batch.Put(handles_[1], destination, destina_score_value);
-  s = vdb_->Write(default_write_options_, &batch);
+  batch->Put(handles_[0], destination, destina_meta_value);
+  batch->Put(handles_[1], destination, destina_score_value);
+  {
+  s = vdb_->Write(default_write_options_, batch);
+  }
   UpdateSpecificKeyStatistics(destination.ToString(), statistic);
   return s;
 }
@@ -1100,7 +1124,7 @@ Status RedisZSets::ZInterstore(const Slice& destination,
 
   *ret = 0;
   uint32_t statistic = 0;
-  VWriteBatch batch;
+  VWriteBatch* batch =  get_batch(pthread_self());
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot = nullptr;
   ScopeSnapshot ss(db_, &snapshot);
@@ -1201,9 +1225,11 @@ Status RedisZSets::ZInterstore(const Slice& destination,
   assert(skiplist_member_score.count() == skiplist_score_member.count());
   parsed_zsets_meta_value.set_count(skiplist_member_score.count());
   memcpy(const_cast<char*>(destina_score_member.data()), const_cast<char*>(destina_member_score.data()), ZSET_PREFIX_LENGTH);
-  batch.Put(handles_[0], destination, destina_member_score);
-  batch.Put(handles_[1], destination, destina_score_member);
-  s = vdb_->Write(default_write_options_, &batch);
+  batch->Put(handles_[0], destination, destina_member_score);
+  batch->Put(handles_[1], destination, destina_score_member);
+  {
+  s = vdb_->Write(default_write_options_, batch);
+  }
   UpdateSpecificKeyStatistics(destination.ToString(), statistic);
   return s;
 }
@@ -1291,7 +1317,7 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
                                   int32_t* ret) {
   *ret = 0;
   uint32_t statistic = 0;
-  VWriteBatch batch;
+  VWriteBatch* batch =  get_batch(pthread_self());
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot = nullptr;
 
@@ -1336,7 +1362,7 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
           right_pass = true;
         }
         if (left_pass && right_pass) {
-          batch.Delete(handles_[1], iter->key());
+          batch->Delete(handles_[1], iter->key());
           del_keys.push_back(std::string(iter->key().data(), iter->key().size()));
           del_cnt++;
           statistic++;
@@ -1361,14 +1387,16 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
       assert(skiplist_member_score.count() == parsed_zsets_meta_value.count());
       memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
-      batch.Put(handles_[0], key, meta_value);
-      batch.Put(handles_[1], key, score_value);
+      batch->Put(handles_[0], key, meta_value);
+      batch->Put(handles_[1], key, score_value);
       *ret = del_cnt;
     }
   } else {
     return Status::NotFound();
   }
-  s = vdb_->Write(default_write_options_, &batch);
+  {
+  s = vdb_->Write(default_write_options_, batch);
+  }
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
   return s;
 }
@@ -1407,10 +1435,13 @@ Status RedisZSets::Expire(const Slice& key, int32_t ttl) {
       vdb_->Delete(default_write_options_, handles_[1], key);
       return s;
     }
-    VWriteBatch batch;
-    batch.Put(handles_[0], key, meta_value);
-    batch.Put(handles_[1], key, score_value);
-    s = vdb_->Write(default_write_options_, &batch);
+    VWriteBatch* batch =  get_batch(pthread_self());
+    batch->Put(handles_[0], key, meta_value);
+    batch->Put(handles_[1], key, score_value);
+    {
+
+    s = vdb_->Write(default_write_options_, batch);
+    }
   } else {
     s = Status::NotFound();
   }
@@ -1436,10 +1467,13 @@ Status RedisZSets::Del(const Slice& key) {
     } else {
       uint32_t statistic = parsed_zsets_meta_value.count();
       parsed_zsets_meta_value.InitialMetaValue();
-      VWriteBatch batch;
-      batch.Delete(handles_[0], key);
-      batch.Delete(handles_[1], key);
-      s = vdb_->Write(default_write_options_, &batch);
+      VWriteBatch* batch =  get_batch(pthread_self());
+      batch->Delete(handles_[0], key);
+      batch->Delete(handles_[1], key);
+      {
+  
+      s = vdb_->Write(default_write_options_, batch);
+      }
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
   } else {
@@ -1517,15 +1551,21 @@ Status RedisZSets::Expireat(const Slice& key, int32_t timestamp) {
         s = db_->Get(default_read_options_, handles_[1], key, &score_value);
         assert(s.ok());
         memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
-        VWriteBatch batch;
-        batch.Put(handles_[0], key, meta_value);
-        batch.Put(handles_[1], key, score_value);
-        s = vdb_->Write(default_write_options_, &batch);
+        VWriteBatch* batch =  get_batch(pthread_self());
+        batch->Put(handles_[0], key, meta_value);
+        batch->Put(handles_[1], key, score_value);
+        {
+    
+        s = vdb_->Write(default_write_options_, batch);
+        }
       } else {
-        VWriteBatch batch;
-        batch.Delete(handles_[0], key);
-        batch.Delete(handles_[1], key);
-        s = vdb_->Write(default_write_options_, &batch);
+        VWriteBatch* batch =  get_batch(pthread_self());
+        batch->Delete(handles_[0], key);
+        batch->Delete(handles_[1], key);
+        {
+    
+        s = vdb_->Write(default_write_options_, batch);
+        }
       }
     }
   } else {
@@ -1753,10 +1793,13 @@ Status RedisZSets::Persist(const Slice& key) {
         assert(s.ok());
         parsed_zsets_meta_value.set_timestamp(0);
         memcpy(const_cast<char*>(score_value.data()), const_cast<char*>(meta_value.data()), ZSET_PREFIX_LENGTH);
-        VWriteBatch batch;
-        batch.Put(handles_[0], key, meta_value);
-        batch.Put(handles_[1], key, score_value);
-        s = vdb_->Write(default_write_options_, &batch);
+        VWriteBatch* batch =  get_batch(pthread_self());
+        batch->Put(handles_[0], key, meta_value);
+        batch->Put(handles_[1], key, score_value);
+        {
+    
+        s = vdb_->Write(default_write_options_, batch);
+        }
       }
     }
   } else {
@@ -1887,10 +1930,13 @@ Status RedisZSets::RealDelTimeout(BlackWidow *bw, std::string *key) {
     int64_t unix_time;
     shannon::Env::Default()->GetCurrentTime(&unix_time);
     if (parsed_zsets_meta_value.IsStale()) {
-      VWriteBatch batch;
-      batch.Delete(handles_[0], *key);
-      batch.Delete(handles_[1], *key);
-      s = vdb_->Write(default_write_options_, &batch);
+      VWriteBatch* batch =  get_batch(pthread_self());
+      batch->Delete(handles_[0], *key);
+      batch->Delete(handles_[1], *key);
+      {
+  
+      s = vdb_->Write(default_write_options_, batch);
+      }
     }
   }
   return s;
