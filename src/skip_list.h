@@ -50,12 +50,6 @@ namespace blackwidow {
           }
       };
 
-      /*
-      SkipList() {
-        this->buffer_ = new char[MAX_SKIPLIST_BUF];
-        this->buffer_len_ = MAX_SKIPLIST_BUF;
-        init();
-      }*/
       SkipList(std::string* buffer_str, int prefix = 0, bool is_init = false) {
         if (buffer_str != NULL) {
           buffer_str_ = buffer_str;
@@ -64,6 +58,9 @@ namespace blackwidow {
             init();
           skip_list_manager_ = reinterpret_cast<SkipListManager*>(const_cast<char*>(this->buffer_str_->data() + prefix_));
         }
+        max_level_ = MAX_SKIPLIST_LEVEL;
+        kbranching_ = 4;
+        random_engine_.seed(get_timestamp());
       }
       Iterator* NewIterator() {
         this->skip_list_manager_ = reinterpret_cast<SkipListManager*>(const_cast<char*>(this->buffer_str_->data() + prefix_));
@@ -88,16 +85,12 @@ namespace blackwidow {
       }
       this->buffer_str_->resize(prefix_ + sizeof(SkipListManager));
       skip_list_manager_ = reinterpret_cast<SkipListManager*>(const_cast<char*>(this->buffer_str_->data() + prefix_));
-      //
       skip_list_manager_->count = 0;
       skip_list_manager_->cur_level = 0;
       skip_list_manager_->cur_buf_index = sizeof(SkipListManager);
       memset(skip_list_manager_->head[0].next, 0, sizeof(int)*MAX_SKIPLIST_LEVEL);
       skip_list_manager_->head[0].key_len = 0;
       skip_list_manager_->head[0].prev = sizeof(SkipListManager) - sizeof(SkipListNode);
-      max_level_ = MAX_SKIPLIST_LEVEL;
-      kbranching_ = 4;
-      random_engine_.seed(get_timestamp());
     }
     int random_height() {
       int height = 1;
@@ -115,8 +108,6 @@ namespace blackwidow {
     int kbranching_;
     int max_level_;
     SkipListManager *skip_list_manager_;
-    // char *buffer_;
-    // unsigned int buffer_len_;
     std::string* buffer_str_;
     int prefix_;
     std::default_random_engine random_engine_;
