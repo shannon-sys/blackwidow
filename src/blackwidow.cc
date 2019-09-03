@@ -591,9 +591,10 @@ int64_t g_avg_time = 0;
 Status BlackWidow::ZAdd(const Slice& key,
                         const std::vector<ScoreMember>& score_members,
                         int32_t* ret) {
-  int64_t s_t, e_t;
-  s_t = get_time4();
+  // int64_t s_t, e_t;
+  // s_t = get_time4();
   Status s = zsets_db_->ZAdd(key, score_members, ret);
+  /*
   e_t = get_time4();
   g_iops ++;
   g_avg_time += (e_t - s_t);
@@ -603,7 +604,7 @@ Status BlackWidow::ZAdd(const Slice& key,
     g_iops = 0;
     g_avg_time = 0;
     g_start_time = g_end_time;
-  }
+  }*/
   return s;
 }
 
