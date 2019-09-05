@@ -255,6 +255,7 @@ Status RedisZSets::ZAdd(const Slice& key,
         cnt++;
       }
     }
+    delete member_score_iter;
     assert(skiplist_member_score.count() == skiplist_score_member.count());
     assert(skiplist_member_score.count() == parsed_zsets_meta_value.count() + cnt);
     parsed_zsets_meta_value.ModifyCount(cnt);
@@ -415,6 +416,7 @@ Status RedisZSets::ZIncrby(const Slice& key,
       parsed_zsets_meta_value.set_count(skiplist_member_score.count());
       score = increment;
     }
+    delete iter;
   } else {
     SkipList skiplist_member_score(&meta_value, ZSET_PREFIX_LENGTH, true);
     SkipList skiplist_score_member(&score_value, ZSET_PREFIX_LENGTH, true);
@@ -1000,8 +1002,10 @@ Status RedisZSets::ZScore(const Slice& key, const Slice& member, double* score) 
         double tmp = parsed_zsets_member_score.score();
         *score = tmp;
       } else {
+        delete iter;
         return s;
       }
+      delete iter;
     }
   } else {
     return Status::NotFound();
