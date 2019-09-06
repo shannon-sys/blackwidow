@@ -1458,8 +1458,7 @@ Status RedisHashes::RealDelTimeout(BlackWidow * bw,std::string * key) {
       ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
       int64_t unix_time;
       shannon::Env::Default()->GetCurrentTime(&unix_time);
-      if (parsed_hashes_meta_value.timestamp() < static_cast<int32_t>(unix_time))
-      {
+      if (parsed_hashes_meta_value.IsStale()) {
         AddDelKey(bw, *key);
         s = vdb_->Delete(shannon::WriteOptions(), handles_[0], *key);
       }
