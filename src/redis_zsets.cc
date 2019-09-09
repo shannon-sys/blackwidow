@@ -19,7 +19,6 @@
 using namespace std;
 
 namespace blackwidow {
-unordered_map_cache_lock meta_infos_zset_;
 RedisZSets::RedisZSets(BlackWidow* const bw, const DataType& type)
     : Redis(bw, type) {
 }
@@ -35,12 +34,6 @@ RedisZSets::~RedisZSets() {
   for (auto handle : tmp_handles) {
     delete handle;
   }
-  for (std::unordered_map<std::string, std::string*>::iterator iter =
-        meta_infos_zset_.begin(); iter != meta_infos_zset_.end();
-        ++ iter) {
-      delete iter->second;
-  }
-  meta_infos_zset_.clear();
 }
 
 Status RedisZSets::Open(const BlackwidowOptions& bw_options,
@@ -98,8 +91,6 @@ Status RedisZSets::Open(const BlackwidowOptions& bw_options,
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
   if (s.ok()) {
     vdb_ = new VDB(db_);
-    meta_infos_zset_.SetDb(db_);
-    meta_infos_zset_.SetColumnFamilyHandle(handles_[0]);
   }
   return s;
 }
@@ -118,9 +109,9 @@ Status RedisZSets::CompactRange(const shannon::Slice* begin,
 }
 
 Status RedisZSets::AddDelKey (BlackWidow * bw,const string & str){
-  Status s =   bw->AddDelKey(db_,str,handles_[1]);
+  Status s =   bw->AddDelKey(db_, str, handles_[1]);
   if (!s.ok()) return s;
-  return bw->AddDelKey(db_,str,handles_[2]);
+  return bw->AddDelKey(db_, str, handles_[2]);
 };
 
 Status RedisZSets::GetProperty(const std::string& property, uint64_t* out) {
@@ -217,18 +208,14 @@ Status RedisZSets::ZAdd(const Slice& key,
 
   char score_buf[8];
   int32_t version = 0;
-  std::string *meta_value;
+  std::string meta_value;
   VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
-  std::unordered_map<std::string, std::string*>::iterator meta_info =
-      meta_infos_zset_.find(key.data());
   Status s;
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+  if (s.ok()) {
     bool valid = true;
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()
       || parsed_zsets_meta_value.count() == 0) {
       valid = false;
@@ -282,13 +269,12 @@ Status RedisZSets::ZAdd(const Slice& key,
       }
     }
     parsed_zsets_meta_value.ModifyCount(cnt);
-    batch.Put(handles_[0], key, *meta_value);
+    batch.Put(handles_[0], key, meta_value);
     *ret = cnt;
   } else {
-    meta_value = new std::string();
-    meta_value->resize(12);
-    EncodeFixed32(const_cast<char *>(meta_value->data()), filtered_score_members.size());
-    ZSetsMetaValue zsets_meta_value(Slice(meta_value->data(), meta_value->size()));
+    meta_value.resize(12);
+    EncodeFixed32(const_cast<char *>(meta_value.data()), filtered_score_members.size());
+    ZSetsMetaValue zsets_meta_value(Slice(meta_value.data(), meta_value.size()));
     version = zsets_meta_value.UpdateVersion();
     if (zsets_meta_value.timestamp() != 0 ) {
       char str[sizeof(int32_t)+key.size() +1];
@@ -312,16 +298,6 @@ Status RedisZSets::ZAdd(const Slice& key,
   }
   s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
-  if (s.ok()) {
-      if (meta_info != meta_infos_zset_.end()) {
-          delete meta_info->second;
-          meta_info->second = meta_value;
-      } else {
-          meta_infos_zset_.insert(make_pair(key.data(), meta_value));
-      }
-  } else {
-      delete meta_value;
-  }
   return s;
 }
 
@@ -330,11 +306,9 @@ Status RedisZSets::ZCard(const Slice& key, int32_t* card) {
   *card = 0;
   std::string meta_value;
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
-
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
       *card = 0;
       return Status::NotFound("Stale");
@@ -362,12 +336,12 @@ Status RedisZSets::ZCount(const Slice& key,
 
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
+  std::string meta_value;
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+  s = db_->Get(read_options, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
@@ -419,18 +393,14 @@ Status RedisZSets::ZIncrby(const Slice& key,
   double score = 0;
   char score_buf[8];
   int32_t version = 0;
-  std::string *meta_value;
+  std::string meta_value;
   VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
   Status s;
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()
       || parsed_zsets_meta_value.count() == 0) {
       version = parsed_zsets_meta_value.InitialMetaValue();
@@ -453,16 +423,14 @@ Status RedisZSets::ZIncrby(const Slice& key,
     } else if (s.IsNotFound()) {
       score = increment;
       parsed_zsets_meta_value.ModifyCount(1);
-      batch.Put(handles_[0], key, *meta_value);
+      batch.Put(handles_[0], key, meta_value);
     } else {
-      delete meta_value;
       return s;
     }
   } else {
-    meta_value = new std::string();
-    meta_value->resize(12);
-    EncodeFixed32(const_cast<char *>(meta_value->data()), 1);
-    ZSetsMetaValue zsets_meta_value(Slice(meta_value->data(), meta_value->size()));
+    meta_value.resize(12);
+    EncodeFixed32(const_cast<char *>(meta_value.data()), 1);
+    ZSetsMetaValue zsets_meta_value(Slice(meta_value.data(), meta_value.size()));
     version = zsets_meta_value.UpdateVersion();
     batch.Put(handles_[0], key, zsets_meta_value.Encode());
     score = increment;
@@ -477,16 +445,6 @@ Status RedisZSets::ZIncrby(const Slice& key,
   *ret = score;
   s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
-  if (s.ok()) {
-      if (meta_info != meta_infos_zset_.end()) {
-          delete meta_info->second;
-          meta_info->second = meta_value;
-      } else {
-          meta_infos_zset_.insert(make_pair(key.data(), meta_value));
-      }
-  } else {
-      delete meta_value;
-  }
   return s;
 }
 
@@ -499,13 +457,14 @@ Status RedisZSets::ZRange(const Slice& key,
   const shannon::Snapshot* snapshot = nullptr;
 
   ScopeSnapshot ss(db_, &snapshot);
+  std::string meta_value;
   read_options.snapshot = snapshot;
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
@@ -558,12 +517,11 @@ Status RedisZSets::ZRangebyscore(const Slice& key,
   std::string meta_value;
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
   Status s;
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+  s = db_->Get(read_options, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
@@ -618,10 +576,9 @@ Status RedisZSets::ZRank(const Slice& key,
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    ParsedZSetsMetaValue  parsed_zsets_meta_value(meta_info->second);
+
+  if (s.ok()) {
+    ParsedZSetsMetaValue  parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
       return Status::NotFound("Stale");
     } else if(parsed_zsets_meta_value.count() == 0) {
@@ -653,7 +610,7 @@ Status RedisZSets::ZRank(const Slice& key,
       }
     }
   } else {
-      s = Status::NotFound();
+    s = Status::NotFound();
   }
   return s;
 }
@@ -672,23 +629,17 @@ Status RedisZSets::ZRem(const Slice& key,
     }
   }
 
-  std::string *meta_value;
+  std::string meta_value;
   VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
-      delete meta_value;
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
-      delete meta_value;
       return Status::NotFound();
     } else {
       int32_t del_cnt = 0;
@@ -708,25 +659,18 @@ Status RedisZSets::ZRem(const Slice& key,
           ZSetsScoreKey zsets_score_key(key, version, score, member);
           batch.Delete(handles_[2], zsets_score_key.Encode());
         } else if (!s.IsNotFound()) {
-          delete meta_value;
           return s;
         }
       }
       *ret = del_cnt;
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
-      batch.Put(handles_[0], key, *meta_value);
+      batch.Put(handles_[0], key, meta_value);
     }
   } else {
     return Status::NotFound();
   }
   s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
-  if (s.ok()) {
-      delete meta_info->second;
-      meta_info->second = meta_value;
-  } else {
-      delete meta_value;
-  }
   return s;
 }
 
@@ -736,23 +680,17 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
                                    int32_t* ret) {
   *ret = 0;
   uint32_t statistic = 0;
-  std::string *meta_value;
+  std::string meta_value;
   VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
-      delete meta_value;
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
-      delete meta_value;
       return Status::NotFound();
     } else {
       std::string member;
@@ -783,19 +721,13 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
       delete iter;
       *ret = del_cnt;
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
-      batch.Put(handles_[0], key, *meta_value);
+      batch.Put(handles_[0], key, meta_value);
     }
   } else {
     return Status::NotFound();
   }
   s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
-  if (s.ok()) {
-      delete meta_info->second;
-      meta_info->second = meta_value;
-  } else {
-      delete meta_value;
-  }
   return s;
 }
 
@@ -807,23 +739,17 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
                                     int32_t* ret) {
   *ret = 0;
   uint32_t statistic = 0;
-  std::string *meta_value;
+  std::string meta_value;
   VWriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+  if (s.ok()) {
     ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
-      delete meta_value;
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
-      delete meta_value;
       return Status::NotFound();
     } else {
       std::string member;
@@ -863,19 +789,13 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
       delete iter;
       *ret = del_cnt;
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
-      batch.Put(handles_[0], key, *meta_value);
+      batch.Put(handles_[0], key, meta_value);
     }
   } else {
     return Status::NotFound();
   }
   s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
-  if (s.ok()) {
-      delete meta_info->second;
-      meta_info->second = meta_value;
-  } else {
-      delete meta_value;
-  }
   return s;
 }
 
@@ -886,15 +806,15 @@ Status RedisZSets::ZRevrange(const Slice& key,
   score_members->clear();
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot = nullptr;
+  std::string meta_value;
 
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
   Status s;
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+  s = db_->Get(read_options, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
@@ -944,13 +864,13 @@ Status RedisZSets::ZRevrangebyscore(const Slice& key,
   score_members->clear();
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot = nullptr;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
+  std::string meta_value;
   Status s;
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+  s = db_->Get(read_options, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
@@ -1003,12 +923,11 @@ Status RedisZSets::ZRevrank(const Slice& key,
   std::string meta_value;
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
   Status s;
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+  s = db_->Get(read_options, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
@@ -1052,12 +971,11 @@ Status RedisZSets::ZScore(const Slice& key, const Slice& member, double* score) 
   std::string meta_value;
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
   Status s;
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+  s = db_->Get(read_options, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     int32_t version = parsed_zsets_meta_value.version();
     if (parsed_zsets_meta_value.IsStale()) {
       return Status::NotFound("Stale");
@@ -1093,19 +1011,18 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
   const shannon::Snapshot* snapshot = nullptr;
 
   int32_t version;
-  std::string *meta_value;
+  std::string meta_value;
   ScoreMember sm;
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
   ScopeRecordLock l(lock_mgr_, destination);
   std::map<std::string, double> member_score_map;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
 
   Status s;
   for (size_t idx = 0; idx < keys.size(); ++idx) {
-    meta_info = meta_infos_zset_.find(keys[idx].data());
-    if (meta_info != meta_infos_zset_.end()) {
-      ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+    s = db_->Get(read_options, handles_[0], keys[idx], &meta_value);
+    if (s.ok()) {
+      ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
       if (!parsed_zsets_meta_value.IsStale()
         && parsed_zsets_meta_value.count() != 0) {
         int32_t cur_index = 0;
@@ -1114,7 +1031,7 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
         double weight = idx < weights.size() ? weights[idx] : 1;
         version = parsed_zsets_meta_value.version();
         ZSetsScoreKey zsets_score_key(keys[idx], version, std::numeric_limits<double>::lowest(), Slice());
-	read_options.only_read_key = true;
+        read_options.only_read_key = true;
         shannon::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
         for (iter->Seek(zsets_score_key.Encode());
              iter->Valid() && cur_index <= stop_index;
@@ -1142,22 +1059,17 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
     }
   }
 
-  // s = db_->Get(read_options, handles_[0], destination, &meta_value);
-  meta_info = meta_infos_zset_.find(destination.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+  s = db_->Get(read_options, handles_[0], destination, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     statistic = parsed_zsets_meta_value.count();
     version = parsed_zsets_meta_value.InitialMetaValue();
     parsed_zsets_meta_value.set_count(member_score_map.size());
-    batch.Put(handles_[0], destination, *meta_value);
+    batch.Put(handles_[0], destination, meta_value);
   } else {
-    meta_value = new std::string();
-    meta_value->resize(12);
-    EncodeFixed32(const_cast<char *>(meta_value->data()), member_score_map.size());
-    ZSetsMetaValue zsets_meta_value(Slice(meta_value->data(), meta_value->size()));
+    meta_value.resize(12);
+    EncodeFixed32(const_cast<char *>(meta_value.data()), member_score_map.size());
+    ZSetsMetaValue zsets_meta_value(Slice(meta_value.data(), meta_value.size()));
     version = zsets_meta_value.UpdateVersion();
     batch.Put(handles_[0], destination, zsets_meta_value.Encode());
   }
@@ -1176,16 +1088,6 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
   *ret = member_score_map.size();
   s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(destination.ToString(), statistic);
-  if (s.ok()) {
-      if (meta_info != meta_infos_zset_.end()) {
-          delete meta_info->second;
-          meta_info->second = meta_value;
-      } else {
-          meta_infos_zset_.insert(make_pair(destination.data(), meta_value));
-      }
-  } else {
-      delete meta_value;
-  }
   return s;
 }
 
@@ -1207,9 +1109,8 @@ Status RedisZSets::ZInterstore(const Slice& destination,
   read_options.snapshot = snapshot;
   ScopeRecordLock l(lock_mgr_, destination);
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
 
-  std::string *meta_value;
+  std::string meta_value;
   int32_t version = 0;
   bool have_invalid_zsets = false;
   ScoreMember item;
@@ -1220,9 +1121,9 @@ Status RedisZSets::ZInterstore(const Slice& destination,
   int32_t cur_index = 0;
   int32_t stop_index = 0;
   for (size_t idx = 0; idx < keys.size(); ++idx) {
-    meta_info = meta_infos_zset_.find(keys[idx].data());
-    if (meta_info != meta_infos_zset_.end()) {
-      ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+    s = db_->Get(read_options, handles_[0], keys[idx], &meta_value);
+    if (s.ok()) {
+      ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
       if (parsed_zsets_meta_value.IsStale()
         || parsed_zsets_meta_value.count() == 0) {
         have_invalid_zsets = true;
@@ -1282,24 +1183,19 @@ Status RedisZSets::ZInterstore(const Slice& destination,
     }
   }
 
-  meta_info = meta_infos_zset_.find(destination.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+  s = db_->Get(read_options, handles_[0], destination, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     statistic = parsed_zsets_meta_value.count();
     version = parsed_zsets_meta_value.InitialMetaValue();
     parsed_zsets_meta_value.set_count(final_score_members.size());
-    batch.Put(handles_[0], destination, *meta_value);
+    batch.Put(handles_[0], destination, meta_value);
   } else {
-    meta_value = new std::string();
-    meta_value->resize(12);
-    EncodeFixed32(const_cast<char *>(meta_value->data()), final_score_members.size());
-    ZSetsMetaValue zsets_meta_value(Slice(meta_value->data(), meta_value->size()));
+    meta_value.resize(12);
+    EncodeFixed32(const_cast<char *>(meta_value.data()), final_score_members.size());
+    ZSetsMetaValue zsets_meta_value(Slice(meta_value.data(), meta_value.size()));
     version = zsets_meta_value.UpdateVersion();
     batch.Put(handles_[0], destination, zsets_meta_value.Encode());
-
   }
   char score_buf[8];
   for (const auto& sm : final_score_members) {
@@ -1315,16 +1211,6 @@ Status RedisZSets::ZInterstore(const Slice& destination,
   *ret = final_score_members.size();
   s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(destination.ToString(), statistic);
-  if (s.ok()) {
-      if (meta_info != meta_infos_zset_.end()) {
-          delete meta_info->second;
-          meta_info->second = meta_value;
-      } else {
-          meta_infos_zset_.insert(make_pair(destination.data(), meta_value));
-      }
-  } else {
-      delete meta_value;
-  }
   return s;
 }
 
@@ -1342,14 +1228,14 @@ Status RedisZSets::ZRangebylex(const Slice& key,
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
+  std::string meta_value;
 
   bool left_no_limit = !min.compare("-");
   bool right_not_limit = !max.compare("+");
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+  s = db_->Get(read_options, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()
       || parsed_zsets_meta_value.count() == 0) {
       return Status::NotFound();
@@ -1424,19 +1310,14 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
   bool right_not_limit = !max.compare("+");
 
   int32_t del_cnt = 0;
-  std::string *meta_value;
-  std::unordered_map<std::string, std::string*>::iterator meta_info;
+  std::string meta_value;
   Status s;
 
-  meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+  s = db_->Get(read_options, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()
       || parsed_zsets_meta_value.count() == 0) {
-      delete meta_value;
       return Status::NotFound();
     } else {
       int32_t version = parsed_zsets_meta_value.version();
@@ -1480,7 +1361,7 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
     }
     if (del_cnt > 0) {
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
-      batch.Put(handles_[0], key, *meta_value);
+      batch.Put(handles_[0], key, meta_value);
       *ret = del_cnt;
     }
   } else {
@@ -1488,26 +1369,16 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
   }
   s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
-  if (s.ok()) {
-      delete meta_info->second;
-      meta_info->second = meta_value;
-  } else {
-      delete meta_value;
-  }
   return s;
 }
 
 Status RedisZSets::Expire(const Slice& key, int32_t ttl) {
-  std::string *meta_value;
+  std::string meta_value;
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info =
-      meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char*>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
@@ -1526,50 +1397,33 @@ Status RedisZSets::Expire(const Slice& key, int32_t ttl) {
     } else {
       parsed_zsets_meta_value.InitialMetaValue();
     }
-    s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
-    if (s.ok()) {
-        delete meta_info->second;
-        meta_info->second = meta_value;
-    } else {
-        delete meta_value;
-    }
+    s = vdb_->Put(default_write_options_, handles_[0], key, meta_value);
   } else {
-      s = Status::NotFound();
+    s = Status::NotFound();
   }
   return s;
 }
 
 Status RedisZSets::Del(const Slice& key) {
-  std::string *meta_value;
+  std::string meta_value;
   ScopeRecordLock l(lock_mgr_, key);
-  std::unordered_map<std::string, std::string*>::iterator meta_info =
-      meta_infos_zset_.find(key.data());
   Status s;
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
-      delete meta_value;
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
-      delete meta_value;
       return Status::NotFound();
     } else {
       uint32_t statistic = parsed_zsets_meta_value.count();
       parsed_zsets_meta_value.InitialMetaValue();
-      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
+      s = vdb_->Put(default_write_options_, handles_[0], key, meta_value);
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
-    if (s.ok()) {
-        delete meta_info->second;
-        meta_info->second = meta_value;
-    } else {
-        delete meta_value;
-    }
   } else {
-      s = Status::NotFound();
+    s = Status::NotFound();
   }
   return s;
 }
@@ -1621,18 +1475,14 @@ bool RedisZSets::Scan(const std::string& start_key,
 }
 
 Status RedisZSets::Expireat(const Slice& key, int32_t timestamp) {
-  std::string *meta_value;
+  std::string meta_value;
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info =
-      meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
-      delete meta_value;
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
       return Status::NotFound();
@@ -1647,13 +1497,7 @@ Status RedisZSets::Expireat(const Slice& key, int32_t timestamp) {
       } else {
         parsed_zsets_meta_value.InitialMetaValue();
       }
-      s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
-    }
-    if (s.ok()) {
-        delete meta_info->second;
-        meta_info->second = meta_value;
-    } else {
-        delete meta_value;
+      s = vdb_->Put(default_write_options_, handles_[0], key, meta_value);
     }
   } else {
       s = Status::NotFound();
@@ -1859,49 +1703,38 @@ Status RedisZSets::PKRScanRange(const Slice& key_start, const Slice& key_end,
 }
 
 Status RedisZSets::Persist(const Slice& key) {
-  std::string *meta_value;
+  std::string meta_value;
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info = meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    meta_value = new std::string();
-    meta_value->resize(meta_info->second->size());
-    memcpy(const_cast<char *>(meta_value->data()), meta_info->second->data(), meta_info->second->size());
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
-      delete meta_value;
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
-      delete meta_value;
       return Status::NotFound();
     } else {
       int32_t timestamp = parsed_zsets_meta_value.timestamp();
       if (timestamp == 0) {
-        delete meta_value;
         return Status::NotFound("Not have an associated timeout");
       } else {
         parsed_zsets_meta_value.set_timestamp(0);
-        s = vdb_->Put(default_write_options_, handles_[0], key, *meta_value);
+        s = vdb_->Put(default_write_options_, handles_[0], key, meta_value);
       }
     }
-    if (s.ok()) {
-        delete meta_info->second;
-        meta_info->second = meta_value;
-    } else {
-        delete meta_value;
-    }
   } else {
-      s = Status::NotFound();
+    s = Status::NotFound();
   }
   return s;
 }
 
 Status RedisZSets::TTL(const Slice& key, int64_t* timestamp) {
   Status s;
-  std::unordered_map<std::string, std::string*>::iterator meta_info =
-      meta_infos_zset_.find(key.data());
-  if (meta_info != meta_infos_zset_.end()) {
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_info->second);
+  std::string meta_value;
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
+  if (s.ok()) {
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
       *timestamp = -2;
       return Status::NotFound("Stale");
@@ -2012,8 +1845,7 @@ Status RedisZSets::DelTimeout(BlackWidow * bw,std::string * key) {
   int64_t cur_meta_timestamp_ = DecodeFixed32(slice_key.data());
   int64_t unix_time;
   shannon::Env::Default()->GetCurrentTime(&unix_time);
-  if (cur_meta_timestamp_ > 0 && cur_meta_timestamp_ < static_cast<int32_t>(unix_time))
-  {
+  if (cur_meta_timestamp_ > 0 && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
    key->resize(iter->key().size()-sizeof(int32_t));
    memcpy(const_cast<char *>(key->data()),slice_key.data()+sizeof(int32_t),iter->key().size()-sizeof(int32_t));
     s = RealDelTimeout(bw,key);
@@ -2025,23 +1857,17 @@ Status RedisZSets::DelTimeout(BlackWidow * bw,std::string * key) {
 }
 
 Status RedisZSets::RealDelTimeout(BlackWidow * bw,std::string * key) {
-  Status s = Status::OK();
+  Status s;
   ScopeRecordLock l(lock_mgr_, *key);
   std::string meta_value;
-  std::unordered_map<std::string, std::string *>::iterator meta_info =
-        meta_infos_zset_.find(*key);
-    if (meta_info != meta_infos_zset_.end()) {
-      meta_value.resize(meta_info->second->size());
-      memcpy(const_cast<char *>(meta_value.data()), meta_info->second->data(), meta_info->second->size());
+  s = db_->Get(default_read_options_, handles_[0], *key, &meta_value);
+    if (s.ok()) {
       ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
       int64_t unix_time;
       shannon::Env::Default()->GetCurrentTime(&unix_time);
-      if (parsed_zsets_meta_value.timestamp() < static_cast<int32_t>(unix_time))
-      {
+      if (parsed_zsets_meta_value.timestamp() < static_cast<int32_t>(unix_time)) {
         AddDelKey(bw, *key);
         s = vdb_->Delete(shannon::WriteOptions(), handles_[0], *key);
-        delete meta_info->second;
-        meta_infos_zset_.erase(*key);
       }
     }
     return s;
@@ -2056,14 +1882,6 @@ Status RedisZSets::LogAdd(const Slice& key, const Slice& value,
       s = vdb_->Put(default_write_options_, cfh, key, value);
       if (!s.ok()) {
         return s;
-      }
-      if (cf_name == "default") {
-        unordered_map<std::string, std::string*>::iterator iter =
-            meta_infos_zset_.find(key.ToString());
-        if (iter != meta_infos_zset_.end()) {
-          delete iter->second;
-          meta_infos_zset_.erase(key.ToString());
-        }
       }
       flag = true;
       break;
