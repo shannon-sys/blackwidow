@@ -494,7 +494,8 @@ Status RedisSets::SInterstore(const Slice& destination,
   if (s.ok()) {
     ParsedSetsMetaValue parsed_sets_meta_value(&meta_value);
     if (parsed_sets_meta_value.count() == 0 || parsed_sets_meta_value.IsStale()) {
-      return Status::NotFound("Deleted");
+      *ret =0;
+      return Status::OK();
     }
     bool fg = true ;
     for (auto key : keys){
@@ -540,7 +541,8 @@ Status RedisSets::SInterstore(const Slice& destination,
     for (auto ptr : str_ptrs) 
       delete ptr;
   } else {
-      return Status::NotFound();
+    *ret =0;
+    return Status::OK();
   }
   string destination_value;
   destination_value.reserve(SET_RESERVE_LENGTH);
@@ -606,6 +608,10 @@ Status RedisSets::SMembers(const Slice& key,
 
 Status RedisSets::SMove(const Slice& source, const Slice& destination,
                         const Slice& member, int32_t* ret) {
+  if (source.compare(destination) == 0 ) {
+    *ret = 1;
+    return Status::OK();
+  }
   std::vector<std::string> keys {source.ToString(), destination.ToString()};
   MultiScopeRecordLock ml(lock_mgr_, keys);
   Status s;
@@ -622,31 +628,52 @@ Status RedisSets::SMove(const Slice& source, const Slice& destination,
       std::string des_value;
       des_value.reserve(SET_RESERVE_LENGTH);
       s = db_->Get(ReadOptions(), handles_[0], destination, &des_value );
+      bool des_init = false;
       if (s.ok()) {
         ParsedSetsMetaValue parsed_sets_meta_value2(&des_value);
         if (parsed_sets_meta_value2.IsStale()) {
-          return Status::OK();
+          des_init = true;
         }
         VWriteBatch batch;
         SkipList sou_skiplist = SkipList(&sou_value , SET_PREFIX_LENGTH , false);
-        SkipList des_skiplist = SkipList(&des_value , SET_PREFIX_LENGTH , false);
+        SkipList des_skiplist = SkipList(&des_value , SET_PREFIX_LENGTH , des_init);
         if (sou_skiplist.exists(member)) {
           sou_skiplist.del(member);
-        parsed_sets_meta_value1.set_count(sou_skiplist.count());
-        batch.Put(handles_[0], source, sou_value );
-        *ret = 1;
-        if( ! des_skiplist.exists(member)) {
-          des_skiplist.insert(member);
-          parsed_sets_meta_value2.set_count(des_skiplist.count());
-          batch.Put(handles_[0], destination,des_value );
+          parsed_sets_meta_value1.set_count(sou_skiplist.count());
+          batch.Put(handles_[0], source, sou_value );
+          *ret = 1;
+          if( ! des_skiplist.exists(member)) {
+            des_skiplist.insert(member);
+            parsed_sets_meta_value2.set_count(des_skiplist.count());
+            batch.Put(handles_[0], destination,des_value );
+          }
+          s = vdb_->Write(default_write_options_, &batch);
+          return s;
+        } else {
+          return Status::OK();
         }
-        s = vdb_->Write(default_write_options_, &batch);
-        return s;
       } else {
-        return Status::OK();
+        VWriteBatch batch;
+        SkipList sou_skiplist = SkipList(&sou_value , SET_PREFIX_LENGTH , false);
+        ParsedSetsMetaValue parsed_destination_value(&des_value);
+        parsed_destination_value.InitialMetaValue();
+        SkipList des_skiplist = SkipList(&des_value , SET_PREFIX_LENGTH , true);
+        if (sou_skiplist.exists(member)) {
+          sou_skiplist.del(member);
+          parsed_sets_meta_value1.set_count(sou_skiplist.count());
+          batch.Put(handles_[0], source, sou_value );
+          *ret = 1;
+          if( ! des_skiplist.exists(member)) {
+            des_skiplist.insert(member);
+            parsed_destination_value.set_count(des_skiplist.count());
+            batch.Put(handles_[0], destination,des_value );
+          }
+          s = vdb_->Write(default_write_options_, &batch);
+          return s;
+        } else {
+          return Status::OK();
+        }
       }
-    }
-    return Status::NotFound();
   }
   return Status::NotFound("Stale");
 }
