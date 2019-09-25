@@ -247,9 +247,9 @@ Status RedisSets::SCard(const Slice& key, int32_t* ret) {
       }
     }
   } else {
-      s = Status::NotFound();
+    s = Status::NotFound();
   }
-  return Status::OK();
+  return s;
 }
 
 Status RedisSets::SDiff(const std::vector<std::string>& keys,
@@ -429,19 +429,22 @@ Status RedisSets::SInter(const std::vector<std::string>& keys,
         fg = false;
         continue;
       }
-      std::string * meta_info = new std::string("")  ;
+      std::string * meta_info = new std::string("");
       meta_info->reserve(SET_RESERVE_LENGTH);
       s = db_->Get(read_options, handles_[0], key, meta_info);
       if (s.ok()){
         ParsedSetsMetaValue parsed_sets_meta_value(meta_info);
         if (parsed_sets_meta_value.count() == 0 || parsed_sets_meta_value.IsStale()) {
-            delete meta_info;
-            continue;
+            meta_lists.push_back(new SkipList(meta_info, SET_PREFIX_LENGTH, true));
+            str_ptrs.push_back(meta_info);
+            break;
         }
         meta_lists.push_back(new SkipList(meta_info, SET_PREFIX_LENGTH, false));
         str_ptrs.push_back(meta_info);
       } else {
-        delete meta_info;
+        meta_lists.push_back(new SkipList(meta_info, SET_PREFIX_LENGTH, true));
+        str_ptrs.push_back(meta_info);
+        break;
       }
     }
     SkipList  skiplist = SkipList(&meta_value, SET_PREFIX_LENGTH, false);
@@ -502,16 +505,19 @@ Status RedisSets::SInterstore(const Slice& destination,
       std::string * meta_info = new std::string("")  ;
       meta_info->reserve(SET_RESERVE_LENGTH);
       s = db_->Get(read_options, handles_[0], key, meta_info);
-      if (s.ok()) {
-      ParsedSetsMetaValue parsed_meta_info(meta_info);
-      if (parsed_meta_info.count() == 0 || parsed_meta_info.IsStale()) {
-         delete meta_info;
-         continue;
-      }
+     if (s.ok()){
+        ParsedSetsMetaValue parsed_sets_meta_value(meta_info);
+        if (parsed_sets_meta_value.count() == 0 || parsed_sets_meta_value.IsStale()) {
+            meta_lists.push_back(new SkipList(meta_info, SET_PREFIX_LENGTH, true));
+            str_ptrs.push_back(meta_info);
+            break;
+        }
         meta_lists.push_back(new SkipList(meta_info, SET_PREFIX_LENGTH, false));
         str_ptrs.push_back(meta_info);
       } else {
-        delete meta_info;
+        meta_lists.push_back(new SkipList(meta_info, SET_PREFIX_LENGTH, true));
+        str_ptrs.push_back(meta_info);
+        break;
       }
     }
     SkipList  skiplist = SkipList(&meta_value, SET_PREFIX_LENGTH, false);
