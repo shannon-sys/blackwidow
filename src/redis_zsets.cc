@@ -576,7 +576,7 @@ Status RedisZSets::ZRank(const Slice& key,
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
   Status s;
-
+  s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedZSetsMetaValue  parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
