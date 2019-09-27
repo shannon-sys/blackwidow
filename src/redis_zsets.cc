@@ -746,7 +746,7 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
 
   s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
   if (s.ok()) {
-    ParsedZSetsMetaValue parsed_zsets_meta_value(meta_value);
+    ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
     if (parsed_zsets_meta_value.IsStale()) {
       return Status::NotFound("Stale");
     } else if (parsed_zsets_meta_value.count() == 0) {
@@ -1054,7 +1054,7 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
         }
         delete iter;
       }
-    } else {
+    } else if (!s.IsNotFound()) {
       return Status::NotFound();
     }
   }
