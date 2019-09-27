@@ -1409,11 +1409,11 @@ Status RedisStrings::DelTimeout(BlackWidow * bw,std::string * key) {
   Slice  slice_key = iter->key();
   int64_t cur_meta_timestamp_ = DecodeFixed32(slice_key.data());
   int64_t unix_time;
-  cout <<"curtime"<< cur_meta_timestamp_ << "  "<< iter->key().data() <<endl;
+  // cout <<"curtime"<< cur_meta_timestamp_ << "  "<< iter->key().data() <<endl;
   shannon::Env::Default()->GetCurrentTime(&unix_time);
   if (cur_meta_timestamp_ > 0 && cur_meta_timestamp_ < static_cast<int32_t>(unix_time))
   {
-    cout << " substr error  : "<<endl ;
+    // cout << " substr error  : "<<endl ;
     key->resize(iter->key().size()-sizeof(int32_t));
     memcpy(const_cast<char *>(key->data()),slice_key.data()+sizeof(int32_t),iter->key().size()-sizeof(int32_t));
     ScopeRecordLock l(lock_mgr_, *key);

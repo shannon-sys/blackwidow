@@ -1159,6 +1159,13 @@ Status RedisLists::Expire(const Slice& key, int32_t ttl) {
 
     if (ttl > 0) {
       parsed_lists_meta_value.SetRelativeTimestamp(ttl);
+      if (parsed_lists_meta_value.timestamp() != 0 ) {
+        char str[sizeof(int32_t)+key.size() +1];
+        str[sizeof(int32_t)+key.size() ] = '\0';
+        EncodeFixed32(str,parsed_lists_meta_value.timestamp());
+        memcpy(str + sizeof(int32_t) , key.data(),key.size());
+        vdb_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
+      }
       s = vdb_->Put(default_write_options_, handles_[0], key, meta_value);
     } else {
       parsed_lists_meta_value.InitialMetaValue();
@@ -1251,6 +1258,13 @@ Status RedisLists::Expireat(const Slice& key, int32_t timestamp) {
     } else {
       if (timestamp > 0) {
         parsed_lists_meta_value.set_timestamp(timestamp);
+        if (parsed_lists_meta_value.timestamp() != 0 ) {
+          char str[sizeof(int32_t)+key.size() +1];
+          str[sizeof(int32_t)+key.size() ] = '\0';
+          EncodeFixed32(str,parsed_lists_meta_value.timestamp());
+          memcpy(str + sizeof(int32_t) , key.data(),key.size());
+          vdb_->Put(default_write_options_,handles_[2], {str,sizeof(int32_t)+key.size()}, "1" );
+        }
       } else {
         parsed_lists_meta_value.InitialMetaValue();
       }

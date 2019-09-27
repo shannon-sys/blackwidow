@@ -860,7 +860,7 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
     delkeys_.push({db,key,column_family_handle});
     delkeys_db_->Put(shannon::WriteOptions(),(db->GetName()).substr(db_path_len_)+key,"1");
     quelock_.unlock();
-    cout << "-- Add delseys_db-  "<<db->GetName()<<endl;
+    // cout << "-- Add delseys_db-  "<<db->GetName()<<endl;
     return Status::OK();
   }
 
@@ -912,8 +912,8 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
               iters[0]->Next()) {
           if (changed) ss=Status::NotSupported("Not supported operation in this mode.");
               flag = true;
-          cout <<key.handle->GetName()<<"DoDelKey delete key  :  "
-                  << iters[0]->key().ToString()  <<"---------------------------"  <<  endl;
+          // cout <<key.handle->GetName()<<"DoDelKey delete key  :  "
+          //         << iters[0]->key().ToString()  <<"---------------------------"  <<  endl;
           batch.Delete(key.handle,iters[0]->key());
           counts ++;
           if (counts > 300){
