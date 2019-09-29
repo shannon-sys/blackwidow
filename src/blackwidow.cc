@@ -15,6 +15,7 @@
 #include "blackwidow/blackwidow.h"
 #include "skip_list.h"
 
+#include <glog/logging.h>
 #include <vector>
 #include <iostream>
 #include <unistd.h>
@@ -873,7 +874,9 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
       Status ss;
       while (!keys.empty()) {
           ss = RealDel(keys.front());
-          s = delkeys_db_->Delete(shannon::WriteOptions() , keys.front().db->GetName().substr(db_path_len_)+keys.front().name);
+          if (keys.front().handle != zsets_db_->GetColumnFamilyHandles()[1]) {
+            s = delkeys_db_->Delete(shannon::WriteOptions() , keys.front().db->GetName().substr(db_path_len_)+keys.front().name);
+          }
           // cout << "--Del delseys_db-  "<<keys.front().name<<endl;
           if (!ss.ok())s = ss;
           keys.pop();
@@ -1695,7 +1698,7 @@ Status BlackWidow::RunDelTask(){
         return Status::Incomplete("bgtask return with bg_tasks_should_exit_ true");
       }
       if (!s.ok())
-        cout<<"do del  keys error "<<s.getState()<<endl;
+        LOG(ERROR)<<"do del  keys error "<<s.getState()<<endl;
     }
     if (flag) {
       sleep(1);
