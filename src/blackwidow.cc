@@ -874,11 +874,12 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
       Status ss;
       while (!keys.empty()) {
           ss = RealDel(keys.front());
-          if (keys.front().handle != zsets_db_->GetColumnFamilyHandles()[1]) {
+          if (!ss.ok()) {
+            cout << "--RealDel delseys_db  error :  "<< ss.ToString()<< " keys: "<<keys.front().name<<endl;
+          } else if (keys.front().handle != zsets_db_->GetColumnFamilyHandles()[1]) {
             s = delkeys_db_->Delete(shannon::WriteOptions() , keys.front().db->GetName().substr(db_path_len_)+keys.front().name);
           }
           // cout << "--Del delseys_db-  "<<keys.front().name<<endl;
-          if (!ss.ok())s = ss;
           keys.pop();
       }
       return s;
