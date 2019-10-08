@@ -1183,6 +1183,7 @@ Status RedisHashes::Expire(const Slice& key, int32_t ttl) {
   std::string meta_value;
   ScopeRecordLock l(lock_mgr_, key);
   Status s;
+  s = db_->Get(default_read_options_, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
     if (parsed_hashes_meta_value.IsStale()) {
