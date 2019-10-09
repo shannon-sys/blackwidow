@@ -13,6 +13,7 @@
 #include "src/debug.h"
 #include "src/base_meta_value_format.h"
 #include "src/base_data_key_format.h"
+#include "src/base_data_value_format.h"
 #include "swift/compaction_filter.h"
 
 namespace blackwidow {
