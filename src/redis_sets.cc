@@ -753,7 +753,7 @@ Status RedisSets::SRandmember(const Slice& key, int32_t count,
     return Status::OK();
   }
   members->clear();
-  int32_t last_seed = time(NULL);
+  int32_t last_seed = time(NULL) + rand();
   std::default_random_engine engine;
 
   VWriteBatch batch;
