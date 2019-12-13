@@ -543,7 +543,7 @@ Status RedisHashes::HMGet(const Slice& key,
       return Status::NotFound(is_stale ? "Stale" : "");
     } else {
       version = parsed_hashes_meta_value.version();
-      std::vector<std::string> values;
+      std::vector<std::pair<shannon::Status, std::string> > values;
       shannon::ReadBatch read_batch;
       for (const auto& field : fields) {
         HashesDataKey hashes_data_key(key, version, field);
@@ -561,11 +561,7 @@ Status RedisHashes::HMGet(const Slice& key,
       }
       for (const auto& value : values) {
         // not found
-        if (value.length() == 0) {
-          vss->push_back({std::string(), Status::NotFound()});
-	    } else {
-          vss->push_back({value, Status::OK()});
-        }
+        vss->push_back({value.second, value.first});
       }
     }
   } else {
