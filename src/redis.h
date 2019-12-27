@@ -72,6 +72,8 @@ class Redis {
                         const std::string& cf_name) = 0;
   virtual Status LogDelete(const Slice& key, const std::string& cf_name) = 0;
 
+  virtual Status LogDeleteDB() = 0;
+
   int64_t GetWriteSize() {
     return vdb_->GetWriteSize();
   }
@@ -95,7 +97,9 @@ class Redis {
   std::mutex mutex_write_size_;
   shannon::DB* db_;
   std::string default_device_name_ = "/dev/kvdev0";
+  std::string db_path_;
   shannon::WriteOptions default_write_options_;
+  BlackwidowOptions bw_options_;
   shannon::ReadOptions default_read_options_;
   shannon::CompactRangeOptions default_compact_range_options_;
 

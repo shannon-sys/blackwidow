@@ -89,6 +89,7 @@ class RedisStrings : public Redis {
     virtual Status LogAdd(const Slice& key, const Slice& value,
                           const std::string& cf_name) override;
     virtual Status LogDelete(const Slice& key, const std::string& cf_name) override;
+    virtual Status LogDeleteDB() override;
 
     // Iterate all data
     void ScanDatabase();

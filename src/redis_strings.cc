@@ -25,6 +25,8 @@ RedisStrings::RedisStrings(BlackWidow* const bw, const DataType& type)
 
 Status RedisStrings::Open(const BlackwidowOptions& bw_options,
     const std::string& db_path) {
+  bw_options_ = bw_options;
+  db_path_ = db_path; 
   shannon::Options ops(bw_options.options);
   Status s = shannon::DB::Open(ops, db_path, default_device_name_, &db_);
   if (s.ok()) {
@@ -1440,5 +1442,16 @@ Status RedisStrings::LogAdd(const Slice& key, const Slice& value,
 Status RedisStrings::LogDelete(const Slice& key, const std::string& cf_name) {
   return vdb_->Delete(default_write_options_, key);
 }
+
+Status RedisStrings::LogDeleteDB() {
+  for (auto handle : handles_) {
+     delete handle;
+  }
+  delete db_;
+  handles_.clear();
+  shannon::DestroyDB(default_device_name_, db_path_, shannon::Options());
+  return this->Open(bw_options_, db_path_);
+}
+
 
 }  //  namespace blackwidow

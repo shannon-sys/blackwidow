@@ -2025,6 +2025,27 @@ Status BlackWidow::LogCmdCreateDB(const std::string& db_name) {
 }
 
 Status BlackWidow::LogCmdDeleteDB(const std::string& db_name) {
+  if (db_name == STRINGS_DB ||
+     (db_name.size() >= STRINGS_DB.size() &&
+      db_name.find(STRINGS_DB) == db_name.size() - STRINGS_DB.size())) {
+    return strings_db_->LogDeleteDB();
+  } else if (db_name == HASHES_DB ||
+     (db_name.size() >= HASHES_DB.size() &&
+      db_name.find(HASHES_DB) == db_name.size() - HASHES_DB.size())) {
+    return hashes_db_->LogDeleteDB();
+  } else if (db_name == LISTS_DB ||
+     (db_name.size() >= LISTS_DB.size() &&
+     db_name.find(LISTS_DB) == db_name.size() - LISTS_DB.size())) {
+    return lists_db_->LogDeleteDB();
+  } else if (db_name == SETS_DB ||
+     (db_name.size() >= SETS_DB.size() &&
+      db_name.find(SETS_DB) == db_name.size() - SETS_DB.size())) {
+    return sets_db_->LogDeleteDB();
+  } else if (db_name == ZSETS_DB ||
+     (db_name.size() >= ZSETS_DB.size() &&
+      db_name.find(ZSETS_DB) == db_name.size() - ZSETS_DB.size())) {
+    return zsets_db_->LogDeleteDB();
+  }
   return Status::OK();
 }
 

@@ -38,6 +38,8 @@ RedisZSets::~RedisZSets() {
 
 Status RedisZSets::Open(const BlackwidowOptions& bw_options,
                         const std::string& db_path) {
+  bw_options_ = bw_options;
+  db_path_ = db_path;
   statistics_store_.max_size_ = bw_options.statistics_max_size;
   small_compaction_threshold_ = bw_options.small_compaction_threshold;
 
@@ -1907,6 +1909,16 @@ Status RedisZSets::LogDelete(const Slice& key, const std::string& cf_name) {
     return Status::NotFound();
   }
   return s;
+}
+
+Status RedisZSets::LogDeleteDB() {
+  for (auto handle : handles_) {
+    delete handle;
+  }
+  delete db_;
+  handles_.clear();
+  shannon::DestroyDB(default_device_name_, db_path_, shannon::Options());
+  return this->Open(bw_options_, db_path_);
 }
 
 } // blackwidow
