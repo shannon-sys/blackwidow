@@ -68,9 +68,19 @@ class Redis {
   virtual std::vector<shannon::ColumnFamilyHandle*> GetColumnFamilyHandles() = 0;
   virtual Status AddDelKey(BlackWidow * bw,const string & str) = 0;
 
-  virtual Status LogAdd(const Slice& key, const Slice& value,
-                        const std::string& cf_name) = 0;
-  virtual Status LogDelete(const Slice& key, const std::string& cf_name) = 0;
+  virtual Status LogAdd(const Slice& key, const Slice& value, int32_t cf_index) = 0;
+  virtual Status LogDelete(const Slice& key, int32_t cf_index) = 0;
+
+  virtual Status LogDeleteDB() = 0;
+
+  virtual Status LogCreateDB(int32_t db_index = 0) = 0;
+
+  int32_t GetDBIndex() {
+    if (db_ == NULL) {
+      return -1;
+    }
+    return db_->GetIndex();
+  }
 
   int64_t GetWriteSize() {
     return vdb_->GetWriteSize();
@@ -87,13 +97,15 @@ class Redis {
     mutex_write_size_.unlock();
     return write_size;
   }
+  BlackwidowOptions bw_options_;
+  std::string db_path_;
  protected:
   BlackWidow* const bw_;
   DataType type_;
   LockMgr* lock_mgr_;
   blackwidow::VDB* vdb_;
   std::mutex mutex_write_size_;
-  shannon::DB* db_;
+  shannon::DB* db_ = NULL;
   std::string default_device_name_ = "/dev/kvdev0";
   shannon::WriteOptions default_write_options_;
   shannon::ReadOptions default_read_options_;

@@ -89,9 +89,10 @@ class RedisSets : public Redis {
     virtual Status TTL(const Slice& key, int64_t* timestamp) override;
     virtual std::vector<shannon::ColumnFamilyHandle*> GetColumnFamilyHandles() override;
     virtual Status AddDelKey(BlackWidow * bw,const string & str) override;
-    virtual Status LogAdd(const Slice& key, const Slice& value,
-                          const std::string& cf_name) override;
-    virtual Status LogDelete(const Slice& key, const std::string& cf_name) override;
+    virtual Status LogAdd(const Slice& key, const Slice& value, int32_t cf_index) override;
+    virtual Status LogDelete(const Slice& key, int32_t cf_index) override;
+    virtual Status LogDeleteDB() override;
+    virtual Status LogCreateDB(int32_t db_index = 0) override;
     // Iterate all data
     void ScanDatabase();
 

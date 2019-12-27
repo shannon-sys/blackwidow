@@ -25,6 +25,8 @@ RedisStrings::RedisStrings(BlackWidow* const bw, const DataType& type)
 
 Status RedisStrings::Open(const BlackwidowOptions& bw_options,
     const std::string& db_path) {
+  bw_options_ = bw_options;
+  db_path_ = db_path; 
   shannon::Options ops(bw_options.options);
   Status s = shannon::DB::Open(ops, db_path, default_device_name_, &db_);
   if (s.ok()) {
@@ -1424,13 +1426,29 @@ Status RedisStrings::DelTimeout(BlackWidow * bw,std::string * key) {
   return s;
 }
 
-Status RedisStrings::LogAdd(const Slice& key, const Slice& value,
-                          const std::string& cf_name) {
+Status RedisStrings::LogAdd(const Slice& key, const Slice& value, int32_t cf_index) {
   return vdb_->Put(default_write_options_, key, value);
 }
 
-Status RedisStrings::LogDelete(const Slice& key, const std::string& cf_name) {
+Status RedisStrings::LogDelete(const Slice& key, int32_t cf_index) {
   return vdb_->Delete(default_write_options_, key);
+}
+
+Status RedisStrings::LogDeleteDB() {
+  for (auto handle : handles_) {
+    delete handle;
+  }
+  delete db_;
+  db_ = NULL;
+  handles_.clear();
+  return shannon::DestroyDB(default_device_name_, db_path_, shannon::Options());
+}
+
+Status RedisStrings::LogCreateDB(int32_t db_index) {
+  bw_options_.options.db_index = db_index;
+  if (db_ == NULL)
+    return this->Open(bw_options_, db_path_);
+  return Status::Corruption("creaete db failed!");
 }
 
 }  //  namespace blackwidow

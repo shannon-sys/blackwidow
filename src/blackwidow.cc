@@ -67,7 +67,6 @@ BlackWidow::~BlackWidow() {
   delete zsets_db_;
   delete mutex_factory_;
   delete delkeys_db_;
-  delete delkeys_db_default_handle_;
 }
 
 static std::string AppendSubDirectory(const std::string& db_path,
@@ -86,43 +85,53 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
   if (bw_options.share_block_cache) {
     bw_options.block_cache_size = 100;
   }
+  Status s;
   strings_db_ = new RedisStrings(this, kStrings);
-  Status s = strings_db_->Open(bw_options, AppendSubDirectory(db_path, "strings"));
-  if (!s.ok()) {
-    fprintf (stderr, "[FATAL] open kv db failed, %s\n", s.ToString().c_str());
-    exit(-1);
+  if (!is_slave_) {
+    s = strings_db_->Open(bw_options, AppendSubDirectory(db_path, "strings"));
+    if (!s.ok()) {
+      fprintf (stderr, "[FATAL] open kv db failed, %s\n", s.ToString().c_str());
+      exit(-1);
+    }
   }
 
   hashes_db_ = new RedisHashes(this, kHashes);
-  s = hashes_db_->Open(bw_options, AppendSubDirectory(db_path, "hashes"));
-  if (!s.ok()) {
-    fprintf (stderr, "[FATAL] open hashes db failed, %s\n", s.ToString().c_str());
-    exit(-1);
+  if (!is_slave_) {
+    s = hashes_db_->Open(bw_options, AppendSubDirectory(db_path, "hashes"));
+    if (!s.ok()) {
+      fprintf (stderr, "[FATAL] open hashes db failed, %s\n", s.ToString().c_str());
+      exit(-1);
+    }
   }
 
   sets_db_ = new RedisSets(this, kSets);
-  s = sets_db_->Open(bw_options, AppendSubDirectory(db_path, "sets"));
-  if (!s.ok()) {
-    fprintf (stderr, "[FATAL] open set db failed, %s\n", s.ToString().c_str());
-    exit(-1);
+  if (!is_slave_) {
+    s = sets_db_->Open(bw_options, AppendSubDirectory(db_path, "sets"));
+    if (!s.ok()) {
+      fprintf (stderr, "[FATAL] open set db failed, %s\n", s.ToString().c_str());
+      exit(-1);
+    }
   }
 
   lists_db_ = new RedisLists(this, kLists);
-  s = lists_db_->Open(bw_options, AppendSubDirectory(db_path, "lists"));
-  if (!s.ok()) {
-    fprintf (stderr, "[FATAL] open list db failed, %s\n", s.ToString().c_str());
-    exit(-1);
+  if (!is_slave_) {
+    s = lists_db_->Open(bw_options, AppendSubDirectory(db_path, "lists"));
+    if (!s.ok()) {
+      fprintf (stderr, "[FATAL] open list db failed, %s\n", s.ToString().c_str());
+      exit(-1);
+    }
   }
 
   zsets_db_ = new RedisZSets(this, kZSets);
-  s = zsets_db_->Open(bw_options, AppendSubDirectory(db_path, "zsets"));
-  if (!s.ok()) {
-    fprintf (stderr, "[FATAL] open zset db failed, %s\n", s.ToString().c_str());
-    exit(-1);
-  }
-
-  // if is slave and do not execute the following code
   if (!is_slave_) {
+    s = zsets_db_->Open(bw_options, AppendSubDirectory(db_path, "zsets"));
+    if (!s.ok()) {
+      fprintf (stderr, "[FATAL] open zset db failed, %s\n", s.ToString().c_str());
+      exit(-1);
+    }
+  }
+  if (!is_slave_) {
+    // if is slave and do not execute the following code
     shannon::Options ops(bw_options.options);
     ops.create_if_missing = true;
     ops.create_missing_column_families = true;
@@ -131,24 +140,23 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
       fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
       exit(-1);
     }
-    delete delkeys_db_;
-    shannon::DBOptions db_ops(bw_options.options);
-    std::vector<shannon::ColumnFamilyDescriptor> column_families;
-    std::vector<shannon::ColumnFamilyHandle*> delkeys_handles;
-    shannon::ColumnFamilyOptions default_cf_ops(bw_options.options);
-    column_families.push_back(shannon::ColumnFamilyDescriptor(
-                             "default", default_cf_ops));
-    s = shannon::DB::Open(ops, AppendSubDirectory(db_path, "delkeys"), "/dev/kvdev0",
-            column_families, &delkeys_handles, &delkeys_db_);
-    if (!s.ok()) {
-      fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
-      exit(-1);
-    }
-    delkeys_db_default_handle_ = delkeys_handles[0];
     shannon::DB *db = strings_db_->GetDB();
     db_path_len_ = db->GetName().length() -strlen("strings");
     CheckCleaning();
   }
+  bw_options_ = bw_options;
+  db_path_ = db_path;
+  strings_db_->bw_options_ = bw_options;
+  strings_db_->db_path_ = AppendSubDirectory(db_path, "strings");
+  hashes_db_->bw_options_ = bw_options;
+  hashes_db_->db_path_ = AppendSubDirectory(db_path, "hashes");
+  lists_db_->bw_options_ = bw_options;
+  lists_db_->db_path_ = AppendSubDirectory(db_path, "lists");
+  sets_db_->bw_options_ = bw_options;
+  sets_db_->db_path_ = AppendSubDirectory(db_path, "sets");
+  zsets_db_->bw_options_ = bw_options;
+  zsets_db_->db_path_ = AppendSubDirectory(db_path, "zsets");
+
   return Status::OK();
 }
 
@@ -1965,66 +1973,99 @@ shannon::DB* BlackWidow::GetDBByIndex(const int32_t db_index) {
   if (delkeys_db_->GetIndex() == db_index) {
     return delkeys_db_;
   }
+
   return NULL;
 }
 
 Status BlackWidow::LogCmdAdd(const Slice& key, const Slice& value,
-        const std::string& db_name, const std::string& cf_name) {
+        int32_t db_index, int32_t cf_index) {
+  if (db_index == strings_db_->GetDBIndex()) {
+    return strings_db_->LogAdd(key, value, cf_index);
+  } else if (db_index == hashes_db_->GetDBIndex()) {
+    return hashes_db_->LogAdd(key, value, cf_index);
+  } else if (db_index == lists_db_->GetDBIndex()) {
+    return lists_db_->LogAdd(key, value, cf_index);
+  } else if (db_index == sets_db_->GetDBIndex()) {
+    return sets_db_->LogAdd(key, value, cf_index);
+  } else if (db_index == zsets_db_->GetDBIndex()) {
+    return zsets_db_->LogAdd(key, value, cf_index);
+  } else if (db_index == delkeys_db_->GetIndex()) {
+    return delkeys_db_->Put(shannon::WriteOptions(), key, value);
+  }
+
+  return Status::NotFound("db " + std::to_string(db_index) + "not exists");
+}
+
+Status BlackWidow::LogCmdDelete(const Slice& key, int32_t db_index, int32_t cf_index) {
+  if (db_index == strings_db_->GetDBIndex()) {
+    return strings_db_->LogDelete(key, cf_index);
+  } else if (db_index == hashes_db_->GetDBIndex()) {
+    return hashes_db_->LogDelete(key, cf_index);
+  } else if (db_index == lists_db_->GetDBIndex()) {
+    return lists_db_->LogDelete(key, cf_index);
+  } else if (db_index == sets_db_->GetDBIndex()) {
+    return sets_db_->LogDelete(key, cf_index);
+  } else if (db_index == zsets_db_->GetDBIndex()) {
+    return zsets_db_->LogDelete(key, cf_index);
+  } else if (db_index == delkeys_db_->GetIndex()) {
+    return delkeys_db_->Delete(shannon::WriteOptions(), key);
+  }
+
+  return Status::NotFound("db:" + std::to_string(db_index) + "not exists");
+}
+
+Status BlackWidow::LogCmdCreateDB(const std::string& db_name, int32_t db_index) {
   if (db_name == STRINGS_DB ||
      (db_name.size() >= STRINGS_DB.size() &&
       db_name.find(STRINGS_DB) == db_name.size() - STRINGS_DB.size())) {
-    return strings_db_->LogAdd(key, value, cf_name);
+    return strings_db_->LogCreateDB(db_index);
   } else if (db_name == HASHES_DB ||
      (db_name.size() >= HASHES_DB.size() &&
       db_name.find(HASHES_DB) == db_name.size() - HASHES_DB.size())) {
-    return hashes_db_->LogAdd(key, value, cf_name);
+    return hashes_db_->LogCreateDB(db_index);
   } else if (db_name == LISTS_DB ||
      (db_name.size() >= LISTS_DB.size() &&
-      db_name.find(LISTS_DB) == db_name.size() - LISTS_DB.size())) {
-    return lists_db_->LogAdd(key, value, cf_name);
-  } else if (db_name == SETS_DB ||
-     (db_name.size() >= SETS_DB.size() &&
-      db_name.find(SETS_DB) == db_name.size() - SETS_DB.size())) {
-    return sets_db_->LogAdd(key, value, cf_name);
+     db_name.find(LISTS_DB) == db_name.size() - LISTS_DB.size())) {
+    return lists_db_->LogCreateDB(db_index);
   } else if (db_name == ZSETS_DB ||
      (db_name.size() >= ZSETS_DB.size() &&
       db_name.find(ZSETS_DB) == db_name.size() - ZSETS_DB.size())) {
-    return zsets_db_->LogAdd(key, value, cf_name);
-  }
-  return Status::NotFound("db " + db_name + "not exists");
-}
-
-Status BlackWidow::LogCmdDelete(const Slice& key, const std::string& db_name,
-        const std::string& cf_name) {
-  if (db_name == STRINGS_DB ||
-     (db_name.size() >= STRINGS_DB.size() &&
-      db_name.find(STRINGS_DB) == db_name.size() - STRINGS_DB.size())) {
-    return strings_db_->LogDelete(key, cf_name);
-  } else if (db_name == HASHES_DB ||
-     (db_name.size() >= HASHES_DB.size() &&
-      db_name.find(HASHES_DB) == db_name.size() - HASHES_DB.size())) {
-    return hashes_db_->LogDelete(key, cf_name);
-  } else if (db_name == LISTS_DB ||
-     (db_name.size() >= LISTS_DB.size() &&
-      db_name.find(LISTS_DB) == db_name.size() - LISTS_DB.size())) {
-    return lists_db_->LogDelete(key, cf_name);
+    return zsets_db_->LogCreateDB(db_index);
   } else if (db_name == SETS_DB ||
      (db_name.size() >= SETS_DB.size() &&
       db_name.find(SETS_DB) == db_name.size() - SETS_DB.size())) {
-    return sets_db_->LogDelete(key, cf_name);
-  } else if (db_name == ZSETS_DB ||
-     (db_name.size() >= ZSETS_DB.size() &&
-      db_name.find(ZSETS_DB) == db_name.size() - ZSETS_DB.size())) {
-    return zsets_db_->LogDelete(key, cf_name);
+    return sets_db_->LogCreateDB(db_index);
+  } else if (db_name == AppendSubDirectory(db_path_, "delkeys") ||
+     (db_name.size() >= strlen("delkeys") && db_name.find("delkeys") == db_name.size() - strlen("delkeys"))) {
+    shannon::Options ops(bw_options_.options);
+    ops.create_if_missing = true;
+    ops.create_missing_column_families = true;
+    ops.db_index = db_index;
+    Status s = shannon::DB::Open(ops, AppendSubDirectory(db_path_, "delkeys"),  "/dev/kvdev0", &delkeys_db_);
+    if (s.ok()) {
+      db_path_len_ = db_path_.size();
+    }
+    return s;
   }
-  return Status::NotFound("db:" + db_name + "not exists");
+
+  return Status::NotFound("db:" + std::to_string(db_index) + " not exists");
 }
 
-Status BlackWidow::LogCmdCreateDB(const std::string& db_name) {
-  return Status::OK();
-}
+Status BlackWidow::LogCmdDeleteDB(int32_t db_index) {
+  if (db_index == strings_db_->GetDBIndex()) {
+    return strings_db_->LogDeleteDB();
+  } else if (db_index == hashes_db_->GetDBIndex()) {
+    return hashes_db_->LogDeleteDB();
+  } else if (db_index == lists_db_->GetDBIndex()) {
+    return lists_db_->LogDeleteDB();
+  } else if (db_index == sets_db_->GetDBIndex()) {
+    return sets_db_->LogDeleteDB();
+  } else if (db_index == zsets_db_->GetDBIndex()) {
+    return zsets_db_->LogDeleteDB();
+  } else if (delkeys_db_ != NULL && db_index == delkeys_db_->GetIndex()) {
+    return shannon::DestroyDB("/dev/kvdev0", AppendSubDirectory(db_path_, "delkeys"), bw_options_.options);
+  }
 
-Status BlackWidow::LogCmdDeleteDB(const std::string& db_name) {
   return Status::OK();
 }
 

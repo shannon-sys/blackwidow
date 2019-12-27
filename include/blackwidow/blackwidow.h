@@ -1110,11 +1110,10 @@ class BlackWidow {
   shannon::DB* GetDBByType(const std::string& type);
   shannon::DB* GetDBByIndex(const int32_t db_index);
   Status LogCmdAdd(const Slice& key, const Slice& value,
-                   const std::string& db_name, const std::string& cf_name);
-  Status LogCmdDelete(const Slice& key, const std::string& db_name,
-                      const std::string& cf_name);
-  Status LogCmdCreateDB(const std::string& db_name);
-  Status LogCmdDeleteDB(const std::string& db_name);
+                   int32_t db_index, int32_t cf_index);
+  Status LogCmdDelete(const Slice& key, int32_t db_index, int32_t cf_name);
+  Status LogCmdCreateDB(const std::string& db_name, int32_t db_index);
+  Status LogCmdDeleteDB(int32_t cf_index);
   int64_t GetWriteSize();
   void ResetWriteSize();
   int64_t GetAndResetWriteSize();
@@ -1135,13 +1134,14 @@ class BlackWidow {
   std::queue<DelKey> delkeys_;
   std::mutex quelock_;
   MutexFactory* mutex_factory_;
-  shannon::DB* delkeys_db_;
+  shannon::DB* delkeys_db_ = NULL;
   shannon::ColumnFamilyHandle* delkeys_db_default_handle_;
   bool is_slave_;
 
   LRU<int64_t, std::string> cursors_store_;
   std::shared_ptr<Mutex> cursors_mutex_;
-
+  BlackwidowOptions bw_options_;
+  std::string db_path_;
   // Blackwidow start the background thread for compaction task
   pthread_t bg_tasks_thread_id_;
   pthread_t del_tasks_thread_id_;

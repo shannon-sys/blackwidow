@@ -41,6 +41,8 @@ RedisLists::~RedisLists() {
 
 Status RedisLists::Open(const BlackwidowOptions& bw_options,
                         const std::string& db_path) {
+  bw_options_ = bw_options;
+  db_path_ = db_path;
   statistics_store_.max_size_ = bw_options.statistics_max_size;
   small_compaction_threshold_ = bw_options.small_compaction_threshold;
 
@@ -1400,12 +1402,11 @@ Status RedisLists::RealDelTimeout(BlackWidow * bw,std::string * key) {
     return s;
 }
 
-Status RedisLists::LogAdd(const Slice& key, const Slice& value,
-                          const std::string& cf_name) {
+Status RedisLists::LogAdd(const Slice& key, const Slice& value, int32_t cf_index) {
   Status s;
   bool flag = false;
   for (auto cfh : handles_) {
-    if (cfh->GetName() == cf_name) {
+    if ((int32_t)cfh->GetID() == cf_index) {
       s = vdb_->Put(default_write_options_, cfh, key, value);
       if (!s.ok()) {
         return s;
@@ -1420,11 +1421,11 @@ Status RedisLists::LogAdd(const Slice& key, const Slice& value,
   return s;
 }
 
-Status RedisLists::LogDelete(const Slice& key, const std::string& cf_name) {
+Status RedisLists::LogDelete(const Slice& key, int32_t cf_index) {
   Status s;
   bool flag = false;
   for (auto cfh : handles_) {
-    if (cfh->GetName() == cf_name) {
+    if ((int32_t)cfh->GetID() == cf_index) {
       s = vdb_->Delete(default_write_options_, cfh, key);
       if (!s.ok()) {
         return s;
@@ -1437,6 +1438,23 @@ Status RedisLists::LogDelete(const Slice& key, const std::string& cf_name) {
     return Status::NotFound("db:" + db_->GetName() + "");
   }
   return s;
+}
+
+Status RedisLists::LogDeleteDB() {
+  for (auto handle : handles_) {
+    delete handle;
+  }
+  delete db_;
+  db_ = NULL;
+  handles_.clear();
+  return shannon::DestroyDB(default_device_name_, db_path_, shannon::Options());
+}
+
+Status RedisLists::LogCreateDB(int32_t db_index) {
+  bw_options_.options.db_index = db_index;
+  if (db_ == NULL)
+    return this->Open(bw_options_, db_path_);
+  return Status::Corruption("creaete db failed!");
 }
 
 }   //  namespace blackwidow
