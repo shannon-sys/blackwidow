@@ -71,7 +71,7 @@ struct BlackwidowOptions {
 };
 
 struct DelKey {
-  shannon::DB * db;
+  shannon::DB ** db;
   std::string  name;
   shannon::ColumnFamilyHandle *handle;
 };
