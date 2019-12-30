@@ -52,31 +52,16 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
     // Create column family
     shannon::ColumnFamilyHandle* cf;
     shannon::ColumnFamilyHandle* cf_timeout;
-    shannon::ColumnFamilyHandle* cf_log;
-    shannon::ColumnFamilyHandle* cf_index;
     shannon::ColumnFamilyOptions cfo;
     s = db_->CreateColumnFamily(cfo, "data_cf", &cf);
     if (!s.ok()) {
       return s;
-    }
-    s = db_->CreateColumnFamily(cfo, "log_cf", &cf_log);
-    if (!s.ok()) {
-        delete cf;
-        return s;
-    }
-    s = db_->CreateColumnFamily(cfo, "index_cf", &cf_index);
-    if (!s.ok()) {
-        delete cf;
-        delete cf_log;
-        return s;
     }
     s = db_->CreateColumnFamily(shannon::ColumnFamilyOptions(), "timeout_cf", &cf_timeout);
     if (!s.ok()) {
       return s;
     }
     // Close DB
-    delete cf_index;
-    delete cf_log;
     delete cf;
     delete cf_timeout;
     delete db_;
@@ -86,8 +71,6 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
   shannon::DBOptions db_ops(bw_options.options);
   shannon::ColumnFamilyOptions meta_cf_ops(bw_options.options);
   shannon::ColumnFamilyOptions data_cf_ops(bw_options.options);
-  shannon::ColumnFamilyOptions log_cf_ops(bw_options.options);
-  shannon::ColumnFamilyOptions index_cf_ops(bw_options.options);
   shannon::ColumnFamilyOptions timeout_cf_ops(bw_options.options);
 
   meta_cf_ops.compaction_filter_factory = std::make_shared<ListsMetaFilterFactory>();
@@ -102,12 +85,6 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
   // Data CF
   column_families.push_back(shannon::ColumnFamilyDescriptor(
       "data_cf", data_cf_ops));
-  // Log CF
-  column_families.push_back(shannon::ColumnFamilyDescriptor(
-      "log_cf", log_cf_ops));
-  // Index CF
-  column_families.push_back(shannon::ColumnFamilyDescriptor(
-      "index_cf", index_cf_ops));
   // log TimeOut
   column_families.push_back(shannon::ColumnFamilyDescriptor(
       "timeout_cf", shannon::ColumnFamilyOptions()));
@@ -1378,7 +1355,7 @@ void RedisLists::ScanDatabase() {
 
 Status RedisLists::DelTimeout(BlackWidow * bw,std::string * key) {
   Status s = Status::OK();
-  shannon::Iterator *iter = db_->NewIterator(shannon::ReadOptions(), handles_[4]);
+  shannon::Iterator *iter = db_->NewIterator(shannon::ReadOptions(), handles_[2]);
   if (nullptr == iter) {
     *key = "";
     return s;
@@ -1399,7 +1376,7 @@ Status RedisLists::DelTimeout(BlackWidow * bw,std::string * key) {
    memcpy(const_cast<char *>(key->data()),slice_key.data()+sizeof(int32_t),iter->key().size()-sizeof(int32_t));
     s = RealDelTimeout(bw,key);
     if (s.ok()) {
-      s = vdb_->Delete(shannon::WriteOptions(), handles_[4], iter->key());
+      s = vdb_->Delete(shannon::WriteOptions(), handles_[2], iter->key());
     }
   }
   else  *key = "";
