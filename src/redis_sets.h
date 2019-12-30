@@ -93,6 +93,7 @@ class RedisSets : public Redis {
                           const std::string& cf_name) override;
     virtual Status LogDelete(const Slice& key, const std::string& cf_name) override;
     virtual Status LogDeleteDB() override;
+    virtual Status LogCreateDB() override;
     // Iterate all data
     void ScanDatabase();
 

@@ -1568,9 +1568,15 @@ Status RedisHashes::LogDeleteDB() {
     delete handle;
   }
   delete db_;
+  db_ = NULL;
   handles_.clear();
-  shannon::DestroyDB(default_device_name_, db_path_, shannon::Options());
-  return this->Open(bw_options_, db_path_);
+  return shannon::DestroyDB(default_device_name_, db_path_, shannon::Options());
+}
+
+Status RedisHashes::LogCreateDB() {
+  if (db_ == NULL) 
+    return this->Open(bw_options_, db_path_);
+  return Status::Corruption("creaete db failed!");
 }
 
 }  //  namespace blackwidow

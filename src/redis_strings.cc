@@ -1445,13 +1445,18 @@ Status RedisStrings::LogDelete(const Slice& key, const std::string& cf_name) {
 
 Status RedisStrings::LogDeleteDB() {
   for (auto handle : handles_) {
-     delete handle;
+    delete handle;
   }
   delete db_;
+  db_ = NULL;
   handles_.clear();
-  shannon::DestroyDB(default_device_name_, db_path_, shannon::Options());
-  return this->Open(bw_options_, db_path_);
+  return shannon::DestroyDB(default_device_name_, db_path_, shannon::Options());
 }
 
+Status RedisStrings::LogCreateDB() {
+  if (db_ == NULL)
+    return this->Open(bw_options_, db_path_);
+  return Status::Corruption("creaete db failed!");
+}
 
 }  //  namespace blackwidow

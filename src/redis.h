@@ -74,6 +74,8 @@ class Redis {
 
   virtual Status LogDeleteDB() = 0;
 
+  virtual Status LogCreateDB() = 0;
+
   int64_t GetWriteSize() {
     return vdb_->GetWriteSize();
   }
