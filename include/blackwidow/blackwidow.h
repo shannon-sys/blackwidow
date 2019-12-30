@@ -71,9 +71,9 @@ struct BlackwidowOptions {
 };
 
 struct DelKey {
-  shannon::DB * db;
+  shannon::DB** db;
   std::string  name;
-  shannon::ColumnFamilyHandle *handle;
+  shannon::ColumnFamilyHandle* handle;
 };
 
 struct KeyValue {
@@ -1118,7 +1118,7 @@ class BlackWidow {
   int64_t GetWriteSize();
   void ResetWriteSize();
   int64_t GetAndResetWriteSize();
-  Status AddDelKey(shannon::DB *  db,const string & key,shannon::ColumnFamilyHandle *  handle);
+  Status AddDelKey(shannon::DB**  db,const string & key,shannon::ColumnFamilyHandle *  handle);
   Status DoDelKey();
   Status RealDel(const DelKey &key);
   bool EmptyQue();

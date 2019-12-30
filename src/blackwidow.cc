@@ -850,7 +850,7 @@ int64_t BlackWidow::Del(const std::vector<std::string>& keys,
     return count;
   }
 }
-Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::ColumnFamilyHandle* column_family_handle) {
+Status BlackWidow::AddDelKey(shannon::DB** db,const string & key,shannon::ColumnFamilyHandle* column_family_handle) {
     if ( 0==key.length() ||  nullptr==column_family_handle) {
         return Status::NotFound("nullptr");
     }
@@ -859,7 +859,7 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
     }
     quelock_.lock();
     delkeys_.push({db,key,column_family_handle});
-    delkeys_db_->Put(shannon::WriteOptions(),(db->GetName()).substr(db_path_len_)+key,"1");
+    delkeys_db_->Put(shannon::WriteOptions(),((*db)->GetName()).substr(db_path_len_)+key,"1");
     quelock_.unlock();
     // cout << "-- Add delseys_db-  "<<db->GetName()<<endl;
     return Status::OK();
@@ -877,7 +877,7 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
           if (!ss.ok()) {
             cout << "--RealDel delseys_db  error :  "<< ss.ToString()<< " keys: "<<keys.front().name<<endl;
           } else if (keys.front().handle != zsets_db_->GetColumnFamilyHandles()[1]) {
-            s = delkeys_db_->Delete(shannon::WriteOptions() , keys.front().db->GetName().substr(db_path_len_)+keys.front().name);
+            s = delkeys_db_->Delete(shannon::WriteOptions() , (*keys.front().db)->GetName().substr(db_path_len_)+keys.front().name);
           }
           // cout << "--Del delseys_db-  "<<keys.front().name<<endl;
           keys.pop();
@@ -905,7 +905,7 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
       vector <shannon::ColumnFamilyHandle*>  column_familys;
       column_familys.push_back(key.handle);
       vector<shannon::Iterator *> iters;
-      ss = key.db->NewIterators(shannon::ReadOptions(), column_familys, &iters);
+      ss = (*key.db)->NewIterators(shannon::ReadOptions(), column_familys, &iters);
       if (!ss.ok()) return ss;
       bool flag = false ;
       string x;
@@ -921,7 +921,7 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
           batch.Delete(key.handle,iters[0]->key());
           counts ++;
           if (counts > 300){
-            ss= key.db->Write(shannon::WriteOptions(),&batch);
+            ss= (*key.db)->Write(shannon::WriteOptions(),&batch);
             batch.Clear();
             counts =0;
             if (!ss.ok())
@@ -929,7 +929,7 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
           }
       }
       if (flag && counts >0 ) {
-          ss= key.db->Write(shannon::WriteOptions(),&batch);
+          ss= (*key.db)->Write(shannon::WriteOptions(),&batch);
           if (!ss.ok())
               cout<<"WriteBatch error"<<endl;
       } else  {
