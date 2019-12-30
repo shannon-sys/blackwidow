@@ -561,7 +561,7 @@ Status RedisStrings::MGet(const std::vector<std::string>& keys,
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
   shannon::ReadBatch read_batch;
-  std::vector<std::string> values;
+  std::vector<std::pair<shannon::Status, std::string>> values;
   int read_count = 0;
   for (const auto& key : keys) {
     s = read_batch.Get(key);
@@ -572,17 +572,13 @@ Status RedisStrings::MGet(const std::vector<std::string>& keys,
         return s;
       }
       for (auto v : values) {
-        if (v.size() == 0) {
-	      vss->push_back({std::string(), Status::NotFound("Stale")});
-	    } else {
-	      ParsedStringsValue parsed_strings_value(&v);
-          if (parsed_strings_value.IsStale()) {
-            vss->push_back({std::string(), Status::NotFound("Stale")});
-          } else {
-            vss->push_back({parsed_strings_value.user_value().ToString(), Status::OK()});
-          }
-	  }
-    }
+        ParsedStringsValue parsed_strings_value(&v.second);
+        if (parsed_strings_value.IsStale()) {
+          vss->push_back({std::string(), Status::NotFound("Stale")});
+        } else {
+          vss->push_back({parsed_strings_value.user_value().ToString(), v.first});
+        }
+      }
       read_batch.Clear();
       read_count = 0;
     } // end batch full
@@ -593,16 +589,12 @@ Status RedisStrings::MGet(const std::vector<std::string>& keys,
       return s;
     }
     for (auto v : values) {
-      if (v.size() == 0) {
+      ParsedStringsValue parsed_strings_value(&v.second);
+      if (parsed_strings_value.IsStale()) {
         vss->push_back({std::string(), Status::NotFound("Stale")});
       } else {
-	    ParsedStringsValue parsed_strings_value(&v);
-        if (parsed_strings_value.IsStale()) {
-	      vss->push_back({std::string(), Status::NotFound("Stale")});
-        } else {
-          std::string vv = parsed_strings_value.user_value().ToString();
-          vss->push_back({parsed_strings_value.user_value().ToString(), Status::OK()});
-        }
+        std::string vv = parsed_strings_value.user_value().ToString();
+        vss->push_back({parsed_strings_value.user_value().ToString(), Status::OK()});
       }
     }
     read_batch.Clear();

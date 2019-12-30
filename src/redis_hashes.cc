@@ -567,16 +567,16 @@ Status RedisHashes::HMGet(const Slice& key,
       return Status::NotFound(is_stale ? "Stale" : "");
     } else {
       version = parsed_hashes_meta_value.version();
-      std::vector<std::string> values;
+      std::vector<std::pair<shannon::Status, std::string>> values;
       shannon::ReadBatch read_batch;
       for (const auto& field : fields) {
         HashesDataKey hashes_data_key(key, version, field);
         s = read_batch.Get(handles_[1], hashes_data_key.Encode());
-	    if (!s.ok()) {
-	      vss->clear();
-	      read_batch.Clear();
-	      return s;
-	    }
+	if (!s.ok()) {
+	  vss->clear();
+	  read_batch.Clear();
+	  return s;
+	}
       }
       s = db_->Read(read_options, &read_batch, &values);
       if (!s.ok()) {
@@ -584,13 +584,7 @@ Status RedisHashes::HMGet(const Slice& key,
         return s;
       }
       for (auto& value : values) {
-        // not found
-        if (value.length() == 0) {
-          vss->push_back({std::string(), Status::NotFound()});
-	    } else {
-          TrimHashesDataValue(&value);
-          vss->push_back({value, Status::OK()});
-        }
+        vss->push_back({value.second, value.first});
       }
     }
   } else {
