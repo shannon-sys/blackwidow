@@ -8,10 +8,10 @@
 #include <string>
 namespace blackwidow {
 
-#define HASHES_EXTRA_SUFFIX 'x'
+//#define HASHES_EXTRA_SUFFIX 'x'
 
 // add a byte suffix
-inline void AddHashesDataValueExtraSuffix(std::string* value) {
+/*inline void AddHashesDataValueExtraSuffix(std::string* value) {
   if (value != NULL) {
     value->append(1, HASHES_EXTRA_SUFFIX);
   }
@@ -21,7 +21,7 @@ inline void TrimHashesDataValue(std::string* value) {
   if (value != NULL && value->size() > 0) {
     value->resize(value->size() - 1);
   }
-}
+}*/
 
 }
 #endif

@@ -272,7 +272,6 @@ Status RedisHashes::HGet(const Slice& key, const Slice& field,
       version = parsed_hashes_meta_value.version();
       HashesDataKey data_key(key, version, field);
       s = db_->Get(read_options, handles_[1], data_key.Encode(), value);
-      TrimHashesDataValue(value);
     }
   } else {
     s = Status::NotFound();
@@ -306,7 +305,6 @@ Status RedisHashes::HGetall(const Slice& key,
            iter->Next()) {
         ParsedHashesDataKey parsed_hashes_data_key(iter->key());
         std::string value = iter->value().ToString();
-        TrimHashesDataValue(&value);
         fvs->push_back({parsed_hashes_data_key.field().ToString(), value});
       }
       delete iter;
@@ -337,11 +335,8 @@ Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
       parsed_hashes_meta_value.set_timestamp(0);
       batch.Put(handles_[0], key, meta_value);
       HashesDataKey hashes_data_key(key, version, field);
-      char buf[33];
+      char buf[32];
       Int64ToStr(buf, 32, value);
-      int len = strlen(buf);
-      buf[len] = HASHES_EXTRA_SUFFIX;
-      buf[len + 1] = '\0';
       batch.Put(handles_[1], hashes_data_key.Encode(), buf);
 +     statistic++;
       *ret = value;
@@ -352,7 +347,6 @@ Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
               hashes_data_key.Encode(), &old_value);
       if (s.ok()) {
         int64_t ival = 0;
-        TrimHashesDataValue(&old_value);
         if (!StrToInt64(old_value.data(), old_value.size(), &ival)) {
           return Status::Corruption("hash value is not an integer");
         }
@@ -361,18 +355,12 @@ Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
           return Status::InvalidArgument("Overflow");
         }
         *ret = ival + value;
-        char buf[33];
+        char buf[32];
         Int64ToStr(buf, 32, *ret);
-        int len = strlen(buf);
-        buf[len] = HASHES_EXTRA_SUFFIX;
-        buf[len + 1] = '\0';
         batch.Put(handles_[1], hashes_data_key.Encode(), buf);
       } else if (s.IsNotFound()) {
-        char buf[33];
+        char buf[32];
         Int64ToStr(buf, 32, value);
-        int len = strlen(buf);
-        buf[len] = HASHES_EXTRA_SUFFIX;
-        buf[len + 1] = '\0';
         parsed_hashes_meta_value.ModifyCount(1);
         batch.Put(handles_[0], key, meta_value);
         batch.Put(handles_[1], hashes_data_key.Encode(), buf);
@@ -391,9 +379,6 @@ Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
 
     char buf[32];
     Int64ToStr(buf, 32, value);
-    int len = strlen(buf);
-    buf[len] = HASHES_EXTRA_SUFFIX;
-    buf[len + 1] = '\0';
     batch.Put(handles_[1], hashes_data_key.Encode(), buf);
     *ret = value;
   }
@@ -431,9 +416,7 @@ Status RedisHashes::HIncrbyfloat(const Slice& key, const Slice& field,
       HashesDataKey hashes_data_key(key, version, field);
 
       LongDoubleToStr(long_double_by, new_value);
-      AddHashesDataValueExtraSuffix(new_value);
       batch.Put(handles_[1], hashes_data_key.Encode(), *new_value);
-      TrimHashesDataValue(new_value);
     } else {
       version = parsed_hashes_meta_value.version();
       HashesDataKey hashes_data_key(key, version, field);
@@ -442,7 +425,6 @@ Status RedisHashes::HIncrbyfloat(const Slice& key, const Slice& field,
       if (s.ok()) {
         long double total;
         long double old_value;
-        TrimHashesDataValue(&old_value_str);
         if (StrToLongDouble(old_value_str.data(),
                     old_value_str.size(), &old_value) == -1) {
           return Status::Corruption("value is not a vaild float");
@@ -452,17 +434,13 @@ Status RedisHashes::HIncrbyfloat(const Slice& key, const Slice& field,
         if (LongDoubleToStr(total, new_value) == -1) {
           return Status::InvalidArgument("Overflow");
         }
-        AddHashesDataValueExtraSuffix(new_value);
         batch.Put(handles_[1], hashes_data_key.Encode(), *new_value);
-        TrimHashesDataValue(new_value);
         statistic++;
       } else if (s.IsNotFound()) {
         LongDoubleToStr(long_double_by, new_value);
         parsed_hashes_meta_value.ModifyCount(1);
         batch.Put(handles_[0], key, meta_value);
-        AddHashesDataValueExtraSuffix(new_value);
         batch.Put(handles_[1], hashes_data_key.Encode(), *new_value);
-        TrimHashesDataValue(new_value);
       } else {
         return s;
       }
@@ -476,9 +454,7 @@ Status RedisHashes::HIncrbyfloat(const Slice& key, const Slice& field,
 
     HashesDataKey hashes_data_key(key, version, field);
     LongDoubleToStr(long_double_by, new_value);
-    AddHashesDataValueExtraSuffix(new_value);
     batch.Put(handles_[1], hashes_data_key.Encode(), *new_value);
-    TrimHashesDataValue(new_value);
   }
   s = vdb_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
@@ -572,11 +548,11 @@ Status RedisHashes::HMGet(const Slice& key,
       for (const auto& field : fields) {
         HashesDataKey hashes_data_key(key, version, field);
         s = read_batch.Get(handles_[1], hashes_data_key.Encode());
-	if (!s.ok()) {
-	  vss->clear();
-	  read_batch.Clear();
-	  return s;
-	}
+        if (!s.ok()) {
+	      vss->clear();
+	      read_batch.Clear();
+	      return s;
+	    }
       }
       s = db_->Read(read_options, &read_batch, &values);
       if (!s.ok()) {
@@ -626,9 +602,7 @@ Status RedisHashes::HMSet(const Slice& key,
       batch.Put(handles_[0], key, meta_value);
       for (const auto& fv : filtered_fvs) {
         HashesDataKey hashes_data_key(key, version, fv.field);
-        AddHashesDataValueExtraSuffix(const_cast<std::string*>(&fv.value));
         batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
-        TrimHashesDataValue(const_cast<std::string*>(&fv.value));
       }
     } else {
       int32_t count = 0;
@@ -638,14 +612,10 @@ Status RedisHashes::HMSet(const Slice& key,
         s = db_->KeyExist(default_read_options_, handles_[1], hashes_data_key.Encode());
         if (s.ok()) {
           statistic++;
-          AddHashesDataValueExtraSuffix(const_cast<std::string*>(&fv.value));
           batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
-          TrimHashesDataValue(const_cast<std::string*>(&fv.value));
         } else if (s.IsNotFound()) {
           count++;
-          AddHashesDataValueExtraSuffix(const_cast<std::string*>(&fv.value));
           batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
-          TrimHashesDataValue(const_cast<std::string*>(&fv.value));
         } else {
           return s;
         }
@@ -661,9 +631,7 @@ Status RedisHashes::HMSet(const Slice& key,
     batch.Put(handles_[0], key, hashes_meta_value.Encode());
     for (const auto& fv : filtered_fvs) {
       HashesDataKey hashes_data_key(key, version, fv.field);
-      AddHashesDataValueExtraSuffix(const_cast<std::string*>(&fv.value));
       batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
-      TrimHashesDataValue(const_cast<std::string*>(&fv.value));
     }
   }
   s = vdb_->Write(default_write_options_, &batch);
@@ -689,9 +657,7 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
       parsed_hashes_meta_value.set_count(1);
       batch.Put(handles_[0], key, meta_value);
       HashesDataKey data_key(key, version, field);
-      std::string extra_value = value.ToString();
-      AddHashesDataValueExtraSuffix(&extra_value);
-      batch.Put(handles_[1], data_key.Encode(), extra_value);
+      batch.Put(handles_[1], data_key.Encode(), value);
       *res = 1;
       if (parsed_hashes_meta_value.timestamp() != 0 ) {
         char str[sizeof(int32_t)+key.size() +1];
@@ -707,7 +673,6 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
       if (s.ok()) {
         *res = 0;
         std::string extra_value = value.ToString();
-        AddHashesDataValueExtraSuffix(&extra_value);
         batch.Put(handles_[1], hashes_data_key.Encode(), extra_value);
         statistic++;
       } else if (s.IsNotFound()) {
@@ -721,7 +686,6 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
         }
         batch.Put(handles_[0], key, meta_value);
         std::string extra_value = value.ToString();
-        AddHashesDataValueExtraSuffix(&extra_value);
         batch.Put(handles_[1], hashes_data_key.Encode(), extra_value);
         *res = 1;
       } else {
@@ -736,9 +700,7 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
     meta_value_destion.set_timestamp(0);
     batch.Put(handles_[0], key, meta_value_destion.Encode());
     HashesDataKey data_key(key, version, field);
-    std::string extra_value = value.ToString();
-    AddHashesDataValueExtraSuffix(&extra_value);
-    batch.Put(handles_[1], data_key.Encode(), extra_value);
+    batch.Put(handles_[1], data_key.Encode(), value);
     *res = 1;
   }
 
@@ -764,9 +726,7 @@ Status RedisHashes::HSetnx(const Slice& key, const Slice& field,
       parsed_hashes_meta_value.set_count(1);
       batch.Put(handles_[0], key, meta_value);
       HashesDataKey hashes_data_key(key, version, field);
-      std::string extra_value = value.ToString();
-      AddHashesDataValueExtraSuffix(&extra_value);
-      batch.Put(handles_[1], hashes_data_key.Encode(), extra_value);
+      batch.Put(handles_[1], hashes_data_key.Encode(), value);
       *ret = 1;
     } else {
       version = parsed_hashes_meta_value.version();
@@ -777,9 +737,7 @@ Status RedisHashes::HSetnx(const Slice& key, const Slice& field,
       } else if (s.IsNotFound()) {
         parsed_hashes_meta_value.ModifyCount(1);
         batch.Put(handles_[0], key, meta_value);
-        std::string extra_value = value.ToString();
-        AddHashesDataValueExtraSuffix(&extra_value);
-        batch.Put(handles_[1], hashes_data_key.Encode(), extra_value);
+        batch.Put(handles_[1], hashes_data_key.Encode(), value);
         *ret = 1;
       } else {
         return s;
@@ -792,9 +750,7 @@ Status RedisHashes::HSetnx(const Slice& key, const Slice& field,
     version = hashes_meta_value.UpdateVersion();
     batch.Put(handles_[0], key, hashes_meta_value.Encode());
     HashesDataKey hashes_data_key(key, version, field);
-    std::string extra_value = value.ToString();
-    AddHashesDataValueExtraSuffix(&extra_value);
-    batch.Put(handles_[1], hashes_data_key.Encode(), extra_value);
+    batch.Put(handles_[1], hashes_data_key.Encode(), value);
     *ret = 1;
   }
   s = vdb_->Write(default_write_options_, &batch);
@@ -826,9 +782,7 @@ Status RedisHashes::HVals(const Slice& key,
       for (iter->Seek(prefix);
            iter->Valid() && iter->key().starts_with(prefix);
            iter->Next()) {
-        std::string value = iter->value().ToString();
-        TrimHashesDataValue(&value);
-        values->push_back(value);
+        values->push_back(iter->value().ToString());
       }
       delete iter;
     }
@@ -841,7 +795,6 @@ Status RedisHashes::HStrlen(const Slice& key,
   std::string value;
   Status s = HGet(key, field, &value);
   if (s.ok()) {
-    TrimHashesDataValue(&value);
     *len = value.size();
   } else {
     *len = 0;
@@ -899,9 +852,7 @@ Status RedisHashes::HScan(const Slice& key, int64_t cursor, const std::string& p
         ParsedHashesDataKey parsed_hashes_data_key(iter->key());
         std::string field = parsed_hashes_data_key.field().ToString();
         if (StringMatch(pattern.data(), pattern.size(), field.data(), field.size(), 0)) {
-          std::string value = iter->value().ToString();
-          TrimHashesDataValue(&value);
-          field_values->push_back({field, value});
+          field_values->push_back({field, iter->value().ToString()});
         }
         rest--;
       }
@@ -954,9 +905,7 @@ Status RedisHashes::HScanx(const Slice& key, const std::string start_field, cons
         ParsedHashesDataKey parsed_hashes_data_key(iter->key());
         std::string field = parsed_hashes_data_key.field().ToString();
         if (StringMatch(pattern.data(), pattern.size(), field.data(), field.size(), 0)) {
-          std::string value = iter->value().ToString();
-          TrimHashesDataValue(&value);
-          field_values->push_back({field, value});
+          field_values->push_back({field, iter->value().ToString()});
         }
         rest--;
       }
@@ -1142,9 +1091,7 @@ Status RedisHashes::PKHScanRange(const Slice& key,
           break;
         }
         if (StringMatch(pattern.data(), pattern.size(), field.data(), field.size(), 0)) {
-          std::string value = iter->value().ToString();
-          TrimHashesDataValue(&value);
-          field_values->push_back({field, value});
+          field_values->push_back({field, iter->value().ToString()});
         }
         remain--;
       }
@@ -1210,9 +1157,7 @@ Status RedisHashes::PKHRScanRange(const Slice& key,
           break;
         }
         if (StringMatch(pattern.data(), pattern.size(), field.data(), field.size(), 0)) {
-          std::string value = iter->value().ToString();
-          TrimHashesDataValue(&value);
-          field_values->push_back({field, value});
+          field_values->push_back({field, iter->value().ToString()});
         }
         remain--;
       }
