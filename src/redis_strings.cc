@@ -1434,12 +1434,11 @@ Status RedisStrings::DelTimeout(BlackWidow * bw,std::string * key) {
   return s;
 }
 
-Status RedisStrings::LogAdd(const Slice& key, const Slice& value,
-                          const std::string& cf_name) {
+Status RedisStrings::LogAdd(const Slice& key, const Slice& value, int32_t cf_index) {
   return vdb_->Put(default_write_options_, key, value);
 }
 
-Status RedisStrings::LogDelete(const Slice& key, const std::string& cf_name) {
+Status RedisStrings::LogDelete(const Slice& key, int32_t cf_index) {
   return vdb_->Delete(default_write_options_, key);
 }
 
@@ -1453,7 +1452,8 @@ Status RedisStrings::LogDeleteDB() {
   return shannon::DestroyDB(default_device_name_, db_path_, shannon::Options());
 }
 
-Status RedisStrings::LogCreateDB() {
+Status RedisStrings::LogCreateDB(int32_t db_index) {
+  bw_options_.db_index = db_index;
   if (db_ == NULL)
     return this->Open(bw_options_, db_path_);
   return Status::Corruption("creaete db failed!");
