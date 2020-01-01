@@ -76,6 +76,9 @@ class Redis {
   virtual Status LogCreateDB(int32_t db_index = 0) = 0;
 
   int32_t GetDBIndex() {
+    if (db_ == NULL) {
+      return -1;
+    }
     return db_->GetIndex();
   }
 
