@@ -2027,14 +2027,14 @@ Status BlackWidow::LogCmdCreateDB(const std::string& db_name, int32_t db_index) 
      (db_name.size() >= LISTS_DB.size() &&
      db_name.find(LISTS_DB) == db_name.size() - LISTS_DB.size())) {
     return lists_db_->LogCreateDB();
-  } else if (db_name == SETS_DB ||
-     (db_name.size() >= SETS_DB.size() &&
-      db_name.find(SETS_DB) == db_name.size() - SETS_DB.size())) {
-    return sets_db_->LogCreateDB();
   } else if (db_name == ZSETS_DB ||
      (db_name.size() >= ZSETS_DB.size() &&
       db_name.find(ZSETS_DB) == db_name.size() - ZSETS_DB.size())) {
     return zsets_db_->LogCreateDB();
+  } else if (db_name == SETS_DB ||
+     (db_name.size() >= SETS_DB.size() &&
+      db_name.find(SETS_DB) == db_name.size() - SETS_DB.size())) {
+    return sets_db_->LogCreateDB();
   } else if (db_name == AppendSubDirectory(db_path_, "delkeys") ||
      (db_name.size() >= strlen("delkeys") && db_name.find("delkeys") == db_name.size() - strlen("delkeys"))) {
     shannon::Options ops(bw_options_.options);
