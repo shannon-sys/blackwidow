@@ -1573,7 +1573,7 @@ Status RedisHashes::LogDeleteDB() {
 }
 
 Status RedisHashes::LogCreateDB(int32_t db_index) {
-  bw_options_.db_index = db_index;
+  bw_options_.options.db_index = db_index;
   if (db_ == NULL) 
     return this->Open(bw_options_, db_path_);
   return Status::Corruption("creaete db failed!");
