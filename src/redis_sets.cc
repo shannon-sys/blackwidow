@@ -104,7 +104,7 @@ Status RedisSets::CompactRange(const shannon::Slice* begin,
   return Status::OK();
 }
 Status RedisSets::AddDelKey(BlackWidow * bw,const string  & str){
-  return bw->AddDelKey(db_,str,handles_[0]);
+  return bw->AddDelKey(&db_,str,handles_[0]);
 };
 Status RedisSets::GetProperty(const std::string& property, uint64_t* out) {
   std::string value;

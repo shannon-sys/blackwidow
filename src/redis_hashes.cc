@@ -1294,7 +1294,7 @@ Status RedisHashes::Del(const Slice& key) {
 }
 
 Status RedisHashes::AddDelKey(BlackWidow * bw,const string & str) {
-  return bw->AddDelKey(db_,str,handles_[1]);
+  return bw->AddDelKey(&db_,str,handles_[1]);
 };
 
 bool RedisHashes::Scan(const std::string& start_key,

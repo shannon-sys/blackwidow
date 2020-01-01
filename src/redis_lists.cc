@@ -1175,7 +1175,7 @@ Status RedisLists::Del(const Slice& key) {
 }
 
 Status RedisLists::AddDelKey(BlackWidow *bw,const string & str){
-  return bw->AddDelKey(db_,str,handles_[1]);
+  return bw->AddDelKey(&db_,str,handles_[1]);
 };
 
 bool RedisLists::Scan(const std::string& start_key,

@@ -858,7 +858,7 @@ int64_t BlackWidow::Del(const std::vector<std::string>& keys,
     return count;
   }
 }
-Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::ColumnFamilyHandle* column_family_handle) {
+Status BlackWidow::AddDelKey(shannon::DB** db,const string & key,shannon::ColumnFamilyHandle* column_family_handle) {
     if ( 0==key.length() ||  nullptr==column_family_handle) {
         return Status::NotFound("nullptr");
     }
@@ -866,8 +866,8 @@ Status BlackWidow::AddDelKey(shannon::DB * db,const string & key,shannon::Column
       return Status::Aborted("is slave");
     }
     quelock_.lock();
-    delkeys_.push({&db,key,column_family_handle});
-    delkeys_db_->Put(shannon::WriteOptions(),(db->GetName()).substr(db_path_len_)+key,"1");
+    delkeys_.push({db,key,column_family_handle});
+    delkeys_db_->Put(shannon::WriteOptions(),((*db)->GetName()).substr(db_path_len_)+key,"1");
     quelock_.unlock();
     // cout << "-- Add delseys_db-  "<<db->GetName()<<endl;
     return Status::OK();
