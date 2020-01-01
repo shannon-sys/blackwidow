@@ -1135,7 +1135,7 @@ class BlackWidow {
   std::queue<DelKey> delkeys_;
   std::mutex quelock_;
   MutexFactory* mutex_factory_;
-  shannon::DB* delkeys_db_;
+  shannon::DB* delkeys_db_ = NULL;
   shannon::ColumnFamilyHandle* delkeys_db_default_handle_;
   bool is_slave_;
 

@@ -2062,7 +2062,7 @@ Status BlackWidow::LogCmdDeleteDB(int32_t db_index) {
     return sets_db_->LogDeleteDB();
   } else if (db_index == zsets_db_->GetDBIndex()) {
     return zsets_db_->LogDeleteDB();
-  } else if (db_index == delkeys_db_->GetIndex()) {
+  } else if (delkeys_db_ != NULL && db_index == delkeys_db_->GetIndex()) {
     return shannon::DestroyDB("/dev/kvdev0", AppendSubDirectory(db_path_, "delkeys"), bw_options_.options);
   }
 
