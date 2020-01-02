@@ -202,7 +202,7 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
   if (map.find(ZSETS_DB) != map.end()) {
     zsets_db_->bw_options_.options.forced_index = true;
     zsets_db_->bw_options_.options.db_index = map[ZSETS_DB];
-    Status s = sets_db_->Open(zsets_db_->bw_options_, zsets_db_->db_path_);
+    Status s = zsets_db_->Open(zsets_db_->bw_options_, zsets_db_->db_path_);
     if (!s.ok()) {
       fprintf(stderr, "[FATAL] open zsets db failed, %s\n", s.ToString().c_str());
       exit(-1);
