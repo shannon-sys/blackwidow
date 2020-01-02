@@ -85,65 +85,77 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
   if (bw_options.share_block_cache) {
     bw_options.block_cache_size = 100;
   }
+  if (is_slave_) {
+    bw_options.options.create_if_missing = false;
+  }
   Status s;
   strings_db_ = new RedisStrings(this, kStrings);
-  if (!is_slave_) {
-    s = strings_db_->Open(bw_options, AppendSubDirectory(db_path, "strings"));
-    if (!s.ok()) {
-      fprintf (stderr, "[FATAL] open kv db failed, %s\n", s.ToString().c_str());
-      exit(-1);
-    }
+  s = strings_db_->Open(bw_options, AppendSubDirectory(db_path, "strings"));
+  if (!s.ok() && !is_slave_) {
+    fprintf (stderr, "[FATAL] open kv db failed, %s\n", s.ToString().c_str());
+    exit(-1);
   }
 
   hashes_db_ = new RedisHashes(this, kHashes);
-  if (!is_slave_) {
-    s = hashes_db_->Open(bw_options, AppendSubDirectory(db_path, "hashes"));
-    if (!s.ok()) {
-      fprintf (stderr, "[FATAL] open hashes db failed, %s\n", s.ToString().c_str());
-      exit(-1);
-    }
+  s = hashes_db_->Open(bw_options, AppendSubDirectory(db_path, "hashes"));
+  if (!s.ok() && !is_slave_) {
+    fprintf (stderr, "[FATAL] open hashes db failed, %s\n", s.ToString().c_str());
+    exit(-1);
   }
 
   sets_db_ = new RedisSets(this, kSets);
-  if (!is_slave_) {
-    s = sets_db_->Open(bw_options, AppendSubDirectory(db_path, "sets"));
-    if (!s.ok()) {
-      fprintf (stderr, "[FATAL] open set db failed, %s\n", s.ToString().c_str());
-      exit(-1);
-    }
+  s = sets_db_->Open(bw_options, AppendSubDirectory(db_path, "sets"));
+  if (!s.ok() && !is_slave_) {
+    fprintf (stderr, "[FATAL] open set db failed, %s\n", s.ToString().c_str());
+    exit(-1);
   }
 
   lists_db_ = new RedisLists(this, kLists);
-  if (!is_slave_) {
-    s = lists_db_->Open(bw_options, AppendSubDirectory(db_path, "lists"));
-    if (!s.ok()) {
-      fprintf (stderr, "[FATAL] open list db failed, %s\n", s.ToString().c_str());
-      exit(-1);
-    }
+  s = lists_db_->Open(bw_options, AppendSubDirectory(db_path, "lists"));
+  if (!s.ok() && !is_slave_) {
+    fprintf (stderr, "[FATAL] open list db failed, %s\n", s.ToString().c_str());
+    exit(-1);
   }
 
   zsets_db_ = new RedisZSets(this, kZSets);
-  if (!is_slave_) {
-    s = zsets_db_->Open(bw_options, AppendSubDirectory(db_path, "zsets"));
-    if (!s.ok()) {
-      fprintf (stderr, "[FATAL] open zset db failed, %s\n", s.ToString().c_str());
-      exit(-1);
-    }
+  s = zsets_db_->Open(bw_options, AppendSubDirectory(db_path, "zsets"));
+  if (!s.ok() && !is_slave_) {
+    fprintf (stderr, "[FATAL] open zset db failed, %s\n", s.ToString().c_str());
+    exit(-1);
   }
-  if (!is_slave_) {
-    // if is slave and do not execute the following code
-    shannon::Options ops(bw_options.options);
-    ops.create_if_missing = true;
-    ops.create_missing_column_families = true;
-    s = shannon::DB::Open(ops, AppendSubDirectory(db_path, "delkeys"),  "/dev/kvdev0", &delkeys_db_);
+  // if is slave and do not execute the following code
+  shannon::Options ops(bw_options.options);
+  // ops.create_if_missing = true;
+  // ops.create_missing_column_families = true;
+  s = shannon::DB::Open(ops, AppendSubDirectory(db_path, "delkeys"),  "/dev/kvdev0", &delkeys_db_);
+  if (!s.ok() && !is_slave_) {
+    fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
+    exit(-1);
+  }
+  if (s.ok()) {
+    shannon::DBOptions db_ops(bw_options.options);
+    ops.create_if_missing = false;
+    ops.forced_index = false;
+    std::vector<shannon::ColumnFamilyDescriptor> column_families;
+    std::vector<shannon::ColumnFamilyHandle*> delkeys_handles;
+    shannon::ColumnFamilyOptions default_cf_ops(bw_options_.options);
+    column_families.push_back(shannon::ColumnFamilyDescriptor("default", default_cf_ops));
+    s = shannon::DB::Open(ops, AppendSubDirectory(db_path, "delkeys"), "/dev/kvdev0",
+                          column_families, &delkeys_handles, &delkeys_db_);
     if (!s.ok()) {
-      fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
+      fprintf(stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
       exit(-1);
     }
-    shannon::DB *db = strings_db_->GetDB();
+    delkeys_db_default_handle_ = delkeys_handles[0];
+  }
+
+  // Get db_path_len_
+  shannon::DB *db = strings_db_->GetDB();
+  if (db) {
     db_path_len_ = db->GetName().length() -strlen("strings");
-    CheckCleaning();
   }
+  if (!is_slave_)
+    CheckCleaning();
 
   // incremental synchronization
   bw_options_ = bw_options;
@@ -164,6 +176,8 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
 
 Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
   if (map.find(STRINGS_DB) != map.end()) {
+    strings_db_->CloseDB();
+    strings_db_->bw_options_.options.create_if_missing = true;
     strings_db_->bw_options_.options.forced_index = true;
     strings_db_->bw_options_.options.db_index = map[STRINGS_DB];
     Status s = strings_db_->Open(strings_db_->bw_options_, strings_db_->db_path_);
@@ -173,8 +187,10 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
     }
   }
   if (map.find(HASHES_DB) != map.end()) {
+    hashes_db_->CloseDB();
+    hashes_db_->bw_options_.options.create_if_missing = true;
     hashes_db_->bw_options_.options.forced_index = true;
-    hashes_db_->bw_options_.options.db_index = map[STRINGS_DB];
+    hashes_db_->bw_options_.options.db_index = map[HASHES_DB];
     Status s = hashes_db_->Open(hashes_db_->bw_options_, hashes_db_->db_path_);
     if (!s.ok()) {
       fprintf(stderr, "[FATAL] open hash db failed, %s\n", s.ToString().c_str());
@@ -182,6 +198,8 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
     }
   }
   if (map.find(LISTS_DB) != map.end()) {
+    lists_db_->CloseDB();
+    lists_db_->bw_options_.options.create_if_missing = true;
     lists_db_->bw_options_.options.forced_index = true;
     lists_db_->bw_options_.options.db_index = map[LISTS_DB];
     Status s = lists_db_->Open(lists_db_->bw_options_, lists_db_->db_path_);
@@ -191,6 +209,8 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
     }
   }
   if (map.find(SETS_DB) != map.end()) {
+    sets_db_->CloseDB();
+    sets_db_->bw_options_.options.create_if_missing = true;
     sets_db_->bw_options_.options.forced_index = true;
     sets_db_->bw_options_.options.db_index = map[SETS_DB];
     Status s = sets_db_->Open(sets_db_->bw_options_, sets_db_->db_path_);
@@ -200,24 +220,23 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
     }
   }
   if (map.find(ZSETS_DB) != map.end()) {
+    zsets_db_->CloseDB();
+    zsets_db_->bw_options_.options.create_if_missing = true;
     zsets_db_->bw_options_.options.forced_index = true;
     zsets_db_->bw_options_.options.db_index = map[ZSETS_DB];
-    Status s = sets_db_->Open(zsets_db_->bw_options_, zsets_db_->db_path_);
-    if (!s.ok()) {
-      fprintf(stderr, "[FATAL] open zsets db failed, %s\n", s.ToString().c_str());
-      exit(-1);
-    }
-  }
-  if (map.find(ZSETS_DB) != map.end()) {
-    zsets_db_->bw_options_.options.forced_index = true;
-    zsets_db_->bw_options_.options.db_index = map[ZSETS_DB];
-    Status s = sets_db_->Open(zsets_db_->bw_options_, zsets_db_->db_path_);
+    Status s = zsets_db_->Open(zsets_db_->bw_options_, zsets_db_->db_path_);
     if (!s.ok()) {
       fprintf(stderr, "[FATAL] open zsets db failed, %s\n", s.ToString().c_str());
       exit(-1);
     }
   }
   if (map.find(DELKEYS_DB) != map.end()) {
+    if (delkeys_db_ != NULL) {
+      delete delkeys_db_;
+    }
+    if (delkeys_db_default_handle_ != NULL) {
+      delete delkeys_db_default_handle_;
+    }
     shannon::Options ops(bw_options_.options);
     ops.create_if_missing = true;
     ops.create_missing_column_families = true;
@@ -228,6 +247,23 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
       fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
       exit(-1);
     }
+    delete delkeys_db_;
+    delkeys_db_ = NULL;
+    // destion for save column_family_handle
+    shannon::DBOptions db_ops(bw_options_.options);
+    ops.create_if_missing = false;
+    ops.forced_index = false;
+    std::vector<shannon::ColumnFamilyDescriptor> column_families;
+    std::vector<shannon::ColumnFamilyHandle*> delkeys_handles;
+    shannon::ColumnFamilyOptions default_cf_ops(bw_options_.options);
+    column_families.push_back(shannon::ColumnFamilyDescriptor("default", default_cf_ops));
+    s = shannon::DB::Open(ops, AppendSubDirectory(db_path_, "delkeys"), "/dev/kvdev0",
+                          column_families, &delkeys_handles, &delkeys_db_);
+    if (!s.ok()) {
+      fprintf(stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
+      exit(-1);
+    }
+    delkeys_db_default_handle_ = delkeys_handles[0];
     shannon::DB *db = strings_db_->GetDB();
   }
 
@@ -2114,6 +2150,7 @@ Status BlackWidow::LogCmdCreateDB(const std::string& db_name, int32_t db_index) 
     shannon::Options ops(bw_options_.options);
     ops.create_if_missing = true;
     ops.create_missing_column_families = true;
+    ops.forced_index = true;
     ops.db_index = db_index;
     Status s = shannon::DB::Open(ops, AppendSubDirectory(db_path_, "delkeys"),  "/dev/kvdev0", &delkeys_db_);
     if (s.ok()) {
@@ -2161,6 +2198,29 @@ int64_t BlackWidow::GetAndResetWriteSize() {
   return strings_db_->GetAndResetWriteSize() + hashes_db_->GetAndResetWriteSize() +
          lists_db_->GetAndResetWriteSize() + sets_db_->GetAndResetWriteSize() +
          zsets_db_->GetAndResetWriteSize();
+}
+
+bool BlackWidow::IsAllDbOpen() {
+  int count = 0;
+  if (strings_db_->GetDB() != NULL) {
+    count ++;
+  }
+  if (sets_db_->GetDB() != NULL) {
+    count ++;
+  }
+  if (zsets_db_->GetDB() != NULL) {
+    count ++;
+  }
+  if (lists_db_->GetDB() != NULL) {
+    count ++;
+  }
+  if (hashes_db_->GetDB() != NULL) {
+    count ++;
+  }
+  if (delkeys_db_ != NULL) {
+    count ++;
+  }
+  return count == 6;
 }
 
 }  //  namespace blackwidow

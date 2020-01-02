@@ -77,6 +77,7 @@ class RedisLists : public Redis {
     virtual Status LogDelete(const Slice& key, int32_t cf_index) override;
     virtual Status LogDeleteDB() override;
     virtual Status LogCreateDB(int32_t db_index = 0) override;
+    virtual void CloseDB() override;
     // Iterate all data
     void ScanDatabase();
 

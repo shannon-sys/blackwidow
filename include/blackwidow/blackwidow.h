@@ -1126,6 +1126,7 @@ class BlackWidow {
   std::string Encoding(const Slice& key);
   Status CheckCleaning();
   void set_is_slave(bool flag);
+  bool IsAllDbOpen();
  private:
   RedisStrings* strings_db_ ;
   RedisHashes* hashes_db_;
@@ -1137,7 +1138,7 @@ class BlackWidow {
   std::mutex quelock_;
   MutexFactory* mutex_factory_;
   shannon::DB* delkeys_db_ = NULL;
-  shannon::ColumnFamilyHandle* delkeys_db_default_handle_;
+  shannon::ColumnFamilyHandle* delkeys_db_default_handle_ = NULL;
   bool is_slave_;
 
   LRU<int64_t, std::string> cursors_store_;

@@ -1375,6 +1375,9 @@ void RedisSets::ScanDatabase() {
 }
 
 Status RedisSets::DelTimeout(BlackWidow * bw,std::string * key) {
+  if (db_ == NULL) {
+    return Status::IOError("db is not open");
+  }
   Status s = Status::OK();
   shannon::Iterator *iter = db_->NewIterator(shannon::ReadOptions(), handles_[1]);
   if (nullptr == iter) {
@@ -1470,11 +1473,22 @@ Status RedisSets::LogDeleteDB() {
 }
 
 Status RedisSets::LogCreateDB(int32_t db_index) {
+  bw_options_.options.create_if_missing = true;
   bw_options_.options.forced_index = true;
   bw_options_.options.db_index = db_index;
   if (db_ == NULL)
     return this->Open(bw_options_, db_path_);
   return Status::Corruption("creaete db failed!");
+}
+
+void RedisSets::CloseDB() {
+  for (auto handle : handles_) {
+    delete handle;
+  }
+  handles_.clear();
+  if (db_ != NULL) {
+    delete db_;
+  }
 }
 
 } //  namespace blackwidow
