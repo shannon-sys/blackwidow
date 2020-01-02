@@ -1451,6 +1451,7 @@ Status RedisLists::LogDeleteDB() {
 }
 
 Status RedisLists::LogCreateDB(int32_t db_index) {
+  bw_options_.options.create_if_missing = true;
   bw_options_.options.forced_index = true;
   bw_options_.options.db_index = db_index;
   if (db_ == NULL)
