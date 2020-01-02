@@ -1470,6 +1470,7 @@ Status RedisSets::LogDeleteDB() {
 }
 
 Status RedisSets::LogCreateDB(int32_t db_index) {
+  bw_options_.options.forced_index = true;
   bw_options_.options.db_index = db_index;
   if (db_ == NULL)
     return this->Open(bw_options_, db_path_);

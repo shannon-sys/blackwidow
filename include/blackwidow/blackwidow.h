@@ -188,6 +188,8 @@ class BlackWidow {
 
   Status Open(BlackwidowOptions& bw_options, const std::string& db_path);
 
+  Status CreateDatabaseByDBIndexMap(std::map<std::string, int>& map);
+
   Status GetStartKey(int64_t cursor, std::string* start_key);
 
   int64_t StoreAndGetCursor(int64_t cursor, const std::string& next_key);
