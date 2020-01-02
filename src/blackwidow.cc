@@ -174,7 +174,7 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
   }
   if (map.find(HASHES_DB) != map.end()) {
     hashes_db_->bw_options_.options.forced_index = true;
-    hashes_db_->bw_options_.options.db_index = map[STRINGS_DB];
+    hashes_db_->bw_options_.options.db_index = map[HASHES_DB];
     Status s = hashes_db_->Open(hashes_db_->bw_options_, hashes_db_->db_path_);
     if (!s.ok()) {
       fprintf(stderr, "[FATAL] open hash db failed, %s\n", s.ToString().c_str());
@@ -196,15 +196,6 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
     Status s = sets_db_->Open(sets_db_->bw_options_, sets_db_->db_path_);
     if (!s.ok()) {
       fprintf(stderr, "[FATAL] open sets db failed, %s\n", s.ToString().c_str());
-      exit(-1);
-    }
-  }
-  if (map.find(ZSETS_DB) != map.end()) {
-    zsets_db_->bw_options_.options.forced_index = true;
-    zsets_db_->bw_options_.options.db_index = map[ZSETS_DB];
-    Status s = sets_db_->Open(zsets_db_->bw_options_, zsets_db_->db_path_);
-    if (!s.ok()) {
-      fprintf(stderr, "[FATAL] open zsets db failed, %s\n", s.ToString().c_str());
       exit(-1);
     }
   }
