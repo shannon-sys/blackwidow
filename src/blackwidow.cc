@@ -2150,6 +2150,7 @@ Status BlackWidow::LogCmdCreateDB(const std::string& db_name, int32_t db_index) 
     shannon::Options ops(bw_options_.options);
     ops.create_if_missing = true;
     ops.create_missing_column_families = true;
+    ops.forced_index = true;
     ops.db_index = db_index;
     Status s = shannon::DB::Open(ops, AppendSubDirectory(db_path_, "delkeys"),  "/dev/kvdev0", &delkeys_db_);
     if (s.ok()) {
