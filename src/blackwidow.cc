@@ -140,7 +140,7 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
     std::vector<shannon::ColumnFamilyHandle*> delkeys_handles;
     shannon::ColumnFamilyOptions default_cf_ops(bw_options_.options);
     column_families.push_back(shannon::ColumnFamilyDescriptor("default", default_cf_ops));
-    s = shannon::DB::Open(ops, AppendSubDirectory(db_path_, "delkeys"), "/dev/kvdev0",
+    s = shannon::DB::Open(ops, AppendSubDirectory(db_path, "delkeys"), "/dev/kvdev0",
                           column_families, &delkeys_handles, &delkeys_db_);
     if (!s.ok()) {
       fprintf(stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
