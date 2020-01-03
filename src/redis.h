@@ -33,6 +33,8 @@ class Redis {
     return db_;
   }
 
+  virtual void CloseDB() = 0;
+
   // Common Commands
   virtual Status Open(const BlackwidowOptions& bw_options,
                       const std::string& db_path) = 0;

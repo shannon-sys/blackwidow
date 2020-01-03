@@ -1137,7 +1137,7 @@ class BlackWidow {
   std::mutex quelock_;
   MutexFactory* mutex_factory_;
   shannon::DB* delkeys_db_ = NULL;
-  shannon::ColumnFamilyHandle* delkeys_db_default_handle_;
+  shannon::ColumnFamilyHandle* delkeys_db_default_handle_ = NULL;
   bool is_slave_;
 
   LRU<int64_t, std::string> cursors_store_;

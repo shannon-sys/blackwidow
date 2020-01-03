@@ -132,6 +132,24 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
     fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
     exit(-1);
   }
+  if (s.ok()) {
+    shannon::DBOptions db_ops(bw_options.options);
+    ops.create_if_missing = false;
+    ops.forced_index = false;
+    std::vector<shannon::ColumnFamilyDescriptor> column_families;
+    std::vector<shannon::ColumnFamilyHandle*> delkeys_handles;
+    shannon::ColumnFamilyOptions default_cf_ops(bw_options_.options);
+    column_families.push_back(shannon::ColumnFamilyDescriptor("default", default_cf_ops));
+    s = shannon::DB::Open(ops, AppendSubDirectory(db_path_, "delkeys"), "/dev/kvdev0",
+                          column_families, &delkeys_handles, &delkeys_db_);
+    if (!s.ok()) {
+      fprintf(stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
+      exit(-1);
+    }
+    delkeys_db_default_handle_ = delkeys_handles[0];
+  }
+
+  // Get db_path_len_
   shannon::DB *db = strings_db_->GetDB();
   if (db) {
     db_path_len_ = db->GetName().length() -strlen("strings");
@@ -158,6 +176,7 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
 
 Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
   if (map.find(STRINGS_DB) != map.end()) {
+    strings_db_->CloseDB();
     strings_db_->bw_options_.options.create_if_missing = true;
     strings_db_->bw_options_.options.forced_index = true;
     strings_db_->bw_options_.options.db_index = map[STRINGS_DB];
@@ -168,6 +187,7 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
     }
   }
   if (map.find(HASHES_DB) != map.end()) {
+    hashes_db_->CloseDB();
     hashes_db_->bw_options_.options.create_if_missing = true;
     hashes_db_->bw_options_.options.forced_index = true;
     hashes_db_->bw_options_.options.db_index = map[HASHES_DB];
@@ -178,6 +198,7 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
     }
   }
   if (map.find(LISTS_DB) != map.end()) {
+    lists_db_->CloseDB();
     lists_db_->bw_options_.options.create_if_missing = true;
     lists_db_->bw_options_.options.forced_index = true;
     lists_db_->bw_options_.options.db_index = map[LISTS_DB];
@@ -188,6 +209,7 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
     }
   }
   if (map.find(SETS_DB) != map.end()) {
+    sets_db_->CloseDB();
     sets_db_->bw_options_.options.create_if_missing = true;
     sets_db_->bw_options_.options.forced_index = true;
     sets_db_->bw_options_.options.db_index = map[SETS_DB];
@@ -198,6 +220,7 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
     }
   }
   if (map.find(ZSETS_DB) != map.end()) {
+    zsets_db_->CloseDB();
     zsets_db_->bw_options_.options.create_if_missing = true;
     zsets_db_->bw_options_.options.forced_index = true;
     zsets_db_->bw_options_.options.db_index = map[ZSETS_DB];
@@ -208,6 +231,12 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
     }
   }
   if (map.find(DELKEYS_DB) != map.end()) {
+    if (delkeys_db_ != NULL) {
+      delete delkeys_db_;
+    }
+    if (delkeys_db_default_handle_ != NULL) {
+      delete delkeys_db_default_handle_;
+    }
     shannon::Options ops(bw_options_.options);
     ops.create_if_missing = true;
     ops.create_missing_column_families = true;
@@ -218,6 +247,23 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
       fprintf (stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
       exit(-1);
     }
+    delete delkeys_db_;
+    delkeys_db_ = NULL;
+    // destion for save column_family_handle
+    shannon::DBOptions db_ops(bw_options_.options);
+    ops.create_if_missing = false;
+    ops.forced_index = false;
+    std::vector<shannon::ColumnFamilyDescriptor> column_families;
+    std::vector<shannon::ColumnFamilyHandle*> delkeys_handles;
+    shannon::ColumnFamilyOptions default_cf_ops(bw_options_.options);
+    column_families.push_back(shannon::ColumnFamilyDescriptor("default", default_cf_ops));
+    s = shannon::DB::Open(ops, AppendSubDirectory(db_path_, "delkeys"), "/dev/kvdev0",
+                          column_families, &delkeys_handles, &delkeys_db_);
+    if (!s.ok()) {
+      fprintf(stderr, "[FATAL] open delkeys db failed, %s\n", s.ToString().c_str());
+      exit(-1);
+    }
+    delkeys_db_default_handle_ = delkeys_handles[0];
     shannon::DB *db = strings_db_->GetDB();
   }
 

@@ -1478,4 +1478,14 @@ Status RedisSets::LogCreateDB(int32_t db_index) {
   return Status::Corruption("creaete db failed!");
 }
 
+void RedisSets::CloseDB() {
+  for (auto handle : handles_) {
+    delete handle;
+  }
+  handles_.clear();
+  if (db_ != NULL) {
+    delete db_;
+  }
+}
+
 } //  namespace blackwidow
