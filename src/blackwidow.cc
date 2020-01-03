@@ -2199,4 +2199,27 @@ int64_t BlackWidow::GetAndResetWriteSize() {
          zsets_db_->GetAndResetWriteSize();
 }
 
+bool BlackWidow::IsAllDbOpen() {
+  int count = 0;
+  if (strings_db_->GetDB() != NULL) {
+    count ++;
+  }
+  if (sets_db_->GetDB() != NULL) {
+    count ++;
+  }
+  if (zsets_db_->GetDB() != NULL) {
+    count ++;
+  }
+  if (lists_db_->GetDB() != NULL) {
+    count ++;
+  }
+  if (hashes_db_->GetDB() != NULL) {
+    count ++;
+  }
+  if (delkeys_db_ != NULL) {
+    count ++;
+  }
+  return count == 6;
+}
+
 }  //  namespace blackwidow

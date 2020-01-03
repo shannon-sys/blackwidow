@@ -1126,6 +1126,7 @@ class BlackWidow {
   std::string Encoding(const Slice& key);
   Status CheckCleaning();
   void set_is_slave(bool flag);
+  bool IsAllDbOpen();
  private:
   RedisStrings* strings_db_ ;
   RedisHashes* hashes_db_;
