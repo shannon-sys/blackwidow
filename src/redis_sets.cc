@@ -1375,6 +1375,9 @@ void RedisSets::ScanDatabase() {
 }
 
 Status RedisSets::DelTimeout(BlackWidow * bw,std::string * key) {
+  if (db_ == NULL) {
+    return Status::IOError("db is not open");
+  }
   Status s = Status::OK();
   shannon::Iterator *iter = db_->NewIterator(shannon::ReadOptions(), handles_[1]);
   if (nullptr == iter) {

@@ -1394,6 +1394,9 @@ void RedisStrings::ScanDatabase() {
   delete iter;
 }
 Status RedisStrings::DelTimeout(BlackWidow * bw,std::string * key) {
+  if (db_ == NULL) {
+    return Status::IOError("db is not open");
+  }
   Status s = Status::OK();
   shannon::ReadOptions read_options;
   read_options.only_read_key = true;

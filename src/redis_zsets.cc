@@ -1830,7 +1830,10 @@ void RedisZSets::ScanDatabase() {
   delete score_iter;
 }
 
-Status RedisZSets::DelTimeout(BlackWidow * bw,std::string * key) {
+Status RedisZSets::DelTimeout(BlackWidow * bw,std::string * key) {  
+  if (db_ == NULL) {
+    return Status::IOError("db is not open");
+  }
   Status s = Status::OK();
   shannon::Iterator *iter = db_->NewIterator(shannon::ReadOptions(), handles_[3]);
   if (nullptr == iter) {
