@@ -91,7 +91,7 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
 
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
   if (s.ok()) {
-    vdb_ = new VDB(db_);
+    vdb_ = new VDB(&db_);
     meta_infos_list_.SetDb(db_);
     meta_infos_list_.SetColumnFamilyHandle(handles_[0]);
   }

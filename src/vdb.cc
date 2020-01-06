@@ -4,7 +4,7 @@ namespace blackwidow {
 
 Status VDB::Put(const shannon::WriteOptions& write_options, const shannon::Slice& key,
         const Slice& value) {
-  Status s = db_->Put(write_options, key, value);
+  Status s = (*db_)->Put(write_options, key, value);
   if (s.ok()) {
     write_size_ += key.size() + value.size();
   }
@@ -12,7 +12,7 @@ Status VDB::Put(const shannon::WriteOptions& write_options, const shannon::Slice
 }
 
 Status VDB::Delete(const shannon::WriteOptions& write_options, const shannon::Slice& key) {
-  Status s = db_->Delete(write_options, key);
+  Status s = (*db_)->Delete(write_options, key);
   if (s.ok()) {
     write_size_ += key.size();
   }
@@ -20,7 +20,7 @@ Status VDB::Delete(const shannon::WriteOptions& write_options, const shannon::Sl
 }
 
 Status VDB::Write(const shannon::WriteOptions& write_options, VWriteBatch* updates) {
-  Status s = db_->Write(write_options, updates->write_batch());
+  Status s = (*db_)->Write(write_options, updates->write_batch());
   if (s.ok()) {
     write_size_ += updates->size();
   }
@@ -29,7 +29,7 @@ Status VDB::Write(const shannon::WriteOptions& write_options, VWriteBatch* updat
 
 Status VDB::Put(const shannon::WriteOptions& write_options, shannon::ColumnFamilyHandle* handle,
         const shannon::Slice& key, const shannon::Slice& value) {
-  Status s = db_->Put(write_options, handle, key, value);
+  Status s = (*db_)->Put(write_options, handle, key, value);
   if (s.ok()) {
     write_size_ += key.size() + value.size();
   }
@@ -38,7 +38,7 @@ Status VDB::Put(const shannon::WriteOptions& write_options, shannon::ColumnFamil
 
 Status VDB::Delete(const shannon::WriteOptions& write_options, shannon::ColumnFamilyHandle* handle,
         const shannon::Slice& key) {
-  Status s = db_->Delete(write_options, handle, key);
+  Status s = (*db_)->Delete(write_options, handle, key);
   if (s.ok()) {
     write_size_ += key.size();
   }

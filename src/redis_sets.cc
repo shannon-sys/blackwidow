@@ -22,7 +22,6 @@
 #include "skip_list.h"
 
 namespace blackwidow {
-unordered_map_cache_lock meta_infos_set_;
 RedisSets::RedisSets(BlackWidow* const bw, const DataType& type)
     : Redis(bw, type) {
   spop_counts_store_.max_size_ = 1000;
@@ -34,12 +33,6 @@ RedisSets::~RedisSets() {
   for (auto handle : tmp_handles) {
     delete handle;
   }
-  for (std::unordered_map<std::string, std::string*>::iterator iter =
-          meta_infos_set_.begin();iter != meta_infos_set_.end();
-          ++ iter) {
-      delete iter->second;
-  }
-  meta_infos_set_.clear();
 }
 
 Status RedisSets::Open(const BlackwidowOptions& bw_options,
@@ -85,9 +78,7 @@ Status RedisSets::Open(const BlackwidowOptions& bw_options,
       "timeout_cf", shannon::ColumnFamilyOptions()));
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
   if (s.ok()) {
-    vdb_ = new VDB(db_);
-    meta_infos_set_.SetDb(db_);
-    meta_infos_set_.SetColumnFamilyHandle(handles_[0]);
+    vdb_ = new VDB(&db_);
   }
   return s;
 }

@@ -51,7 +51,7 @@ Status RedisStrings::Open(const BlackwidowOptions& bw_options,
       "timeout_cf", shannon::ColumnFamilyOptions()));
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
   if (s.ok()) {
-    vdb_ = new VDB(db_);
+    vdb_ = new VDB(&db_);
   }
   return  s;
 }
