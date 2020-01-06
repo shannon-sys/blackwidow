@@ -53,8 +53,9 @@ class VWriteBatch {
 
 class VDB {
  public:
-   VDB(DB* db) :
+   VDB(DB** db) :
        db_(db) {
+     write_size_ = 0;
    }
    Status Put(const shannon::WriteOptions&, const shannon::Slice& key,
                       const shannon::Slice& value);
@@ -68,7 +69,7 @@ class VDB {
    void ResetWriteSize();
  private:
    std::atomic<int64_t> write_size_;
-   DB* db_;
+   DB** db_;
 };
 
 }  // namespace blackwidow
