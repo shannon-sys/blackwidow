@@ -2089,11 +2089,34 @@ shannon::DB* BlackWidow::GetDBByIndex(const int32_t db_index) {
 
 Status BlackWidow::LogCmdAdd(const Slice& key, const Slice& value,
         int32_t db_index, int32_t cf_index) {
+
   if (db_index == strings_db_->GetDBIndex()) {
     return strings_db_->LogAdd(key, value, cf_index);
   } else if (db_index == hashes_db_->GetDBIndex()) {
     return hashes_db_->LogAdd(key, value, cf_index);
   } else if (db_index == lists_db_->GetDBIndex()) {
+    if (cf_index == 1) {
+      if (key.size() <= 16) {
+        std::cout<<"parse error!-----------------------------\n"<<std::endl;
+      }
+      int64_t index;
+      char buffer[128];
+      index = DecodeBigFixed64(key.data() + key.size() - 8);
+      // memcpy((char*)&index, key.data() + key.size() - 8, 8);
+      sprintf(buffer, "%d\0", index);
+      int len = strlen(buffer);
+      if (value.size() - 1 != len) {
+        std::cout<<"size key.size():"<<key.size()<<" key:"<<key.ToString()<<" value.size():"<<value.size()<<std::endl;
+      }
+      if (memcmp(value.data() + 1, buffer, len) != 0) {
+        std::cout<<"buffer key.size():"<<key.size()<<" value.size():"<<value.size()<<" value:"<<value.ToString()<<" buffer:"<<std::string(buffer, len)<<std::endl;
+      }
+    }
+  // std::cout<<"log add key size:"<<key.size()<<" key:"<<key.ToString()<<" value size:"<<value.size()<<" value:"<<value.ToString()<<std::endl;
+  // if (value.size() > 0 && value.data()[0] == '\0') {
+  //  std::cout<<"fjh------------------------------------------------"<<std::endl;
+  // }
+
     return lists_db_->LogAdd(key, value, cf_index);
   } else if (db_index == sets_db_->GetDBIndex()) {
     return sets_db_->LogAdd(key, value, cf_index);
