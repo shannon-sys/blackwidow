@@ -33,6 +33,8 @@ RedisSets::~RedisSets() {
   for (auto handle : tmp_handles) {
     delete handle;
   }
+  delete db_;
+  db_ = NULL;
 }
 
 Status RedisSets::Open(const BlackwidowOptions& bw_options,

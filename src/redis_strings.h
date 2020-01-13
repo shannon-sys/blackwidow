@@ -18,7 +18,7 @@ namespace blackwidow {
 class RedisStrings : public Redis {
   public:
     RedisStrings(BlackWidow* const bw, const DataType& type);
-    ~RedisStrings() = default;
+    ~RedisStrings();
 
     // Common Commands
     virtual Status Open(const BlackwidowOptions& bw_options,
