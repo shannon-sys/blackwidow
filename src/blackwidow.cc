@@ -2095,28 +2095,6 @@ Status BlackWidow::LogCmdAdd(const Slice& key, const Slice& value,
   } else if (db_index == hashes_db_->GetDBIndex()) {
     return hashes_db_->LogAdd(key, value, cf_index);
   } else if (db_index == lists_db_->GetDBIndex()) {
-    if (cf_index == 1) {
-      if (key.size() <= 16) {
-        std::cout<<"parse error!-----------------------------\n"<<std::endl;
-      }
-      int64_t index;
-      char buffer[128];
-      index = DecodeBigFixed64(key.data() + key.size() - 8);
-      // memcpy((char*)&index, key.data() + key.size() - 8, 8);
-      sprintf(buffer, "%d\0", index);
-      int len = strlen(buffer);
-      if (value.size() - 1 != len) {
-        std::cout<<"size key.size():"<<key.size()<<" key:"<<key.ToString()<<" value.size():"<<value.size()<<std::endl;
-      }
-      if (memcmp(value.data() + 1, buffer, len) != 0) {
-        std::cout<<"buffer key.size():"<<key.size()<<" value.size():"<<value.size()<<" value:"<<value.ToString()<<" buffer:"<<std::string(buffer, len)<<std::endl;
-      }
-    }
-  // std::cout<<"log add key size:"<<key.size()<<" key:"<<key.ToString()<<" value size:"<<value.size()<<" value:"<<value.ToString()<<std::endl;
-  // if (value.size() > 0 && value.data()[0] == '\0') {
-  //  std::cout<<"fjh------------------------------------------------"<<std::endl;
-  // }
-
     return lists_db_->LogAdd(key, value, cf_index);
   } else if (db_index == sets_db_->GetDBIndex()) {
     return sets_db_->LogAdd(key, value, cf_index);
@@ -2148,6 +2126,7 @@ Status BlackWidow::LogCmdDelete(const Slice& key, int32_t db_index, int32_t cf_i
 }
 
 Status BlackWidow::LogCmdCreateDB(const std::string& db_name, int32_t db_index) {
+  std::cout<<"create db name:"<<db_name<<" index:"<<db_index<<std::endl;
   if (db_name == STRINGS_DB ||
      (db_name.size() >= STRINGS_DB.size() &&
       db_name.find(STRINGS_DB) == db_name.size() - STRINGS_DB.size())) {
@@ -2197,6 +2176,8 @@ Status BlackWidow::LogCmdDeleteDB(int32_t db_index) {
   } else if (db_index == zsets_db_->GetDBIndex()) {
     return zsets_db_->LogDeleteDB();
   } else if (delkeys_db_ != NULL && db_index == delkeys_db_->GetIndex()) {
+    delete delkeys_db_;
+    delkeys_db_ = NULL;
     return shannon::DestroyDB("/dev/kvdev0", AppendSubDirectory(db_path_, "delkeys"), bw_options_.options);
   }
 
