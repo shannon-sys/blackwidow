@@ -264,7 +264,6 @@ Status BlackWidow::CreateDatabaseByDBIndexMap(std::map<std::string, int>& map) {
       exit(-1);
     }
     delkeys_db_default_handle_ = delkeys_handles[0];
-    shannon::DB *db = strings_db_->GetDB();
   }
 
   return Status::OK();

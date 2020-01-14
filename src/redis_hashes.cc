@@ -342,7 +342,6 @@ Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
       char buf[32];
       Int64ToStr(buf, 32, value);
       batch.Put(handles_[1], hashes_data_key.Encode(), buf);
-+     statistic++;
       *ret = value;
     } else {
       version = parsed_hashes_meta_value.version();
