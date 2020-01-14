@@ -23,7 +23,6 @@ RedisLists::RedisLists(BlackWidow* const bw, const DataType& type)
     : Redis(bw, type) {
 }
 
-unordered_map_cache_lock meta_infos_list_;
 const shannon::Comparator* ListsDataKeyComparator() {
   static ListsDataKeyComparatorImpl ldkc;
   return &ldkc;
@@ -36,7 +35,8 @@ RedisLists::~RedisLists() {
   for (auto handle : tmp_handles) {
     delete handle;
   }
-  meta_infos_list_.clear();
+  delete db_;
+  db_ = NULL;
 }
 
 Status RedisLists::Open(const BlackwidowOptions& bw_options,
@@ -92,8 +92,6 @@ Status RedisLists::Open(const BlackwidowOptions& bw_options,
   s = shannon::DB::Open(db_ops, db_path, default_device_name_, column_families, &handles_, &db_);
   if (s.ok()) {
     vdb_ = new VDB(&db_);
-    meta_infos_list_.SetDb(db_);
-    meta_infos_list_.SetColumnFamilyHandle(handles_[0]);
   }
   return s;
 }
@@ -190,14 +188,15 @@ void show_meta_info() {
     uint64_t total_size = 0;
     uint32_t count = 0;
     for (std::unordered_map<std::string, std::string*>::iterator iter = meta_infos_list_.begin();
-         iter != meta_infos_list_.end();
-         ++ iter) {
+        iter != meta_infos_list_.end();
+        ++ iter) {
         total_size += iter->first.size();
         total_size += iter->second->size();
         ++ count;
     }
     std::cout<<"count:"<<count<<"total size:"<<total_size<<"B "<<(total_size/1024)<<"k "<<(total_size/1024/1024)<<"M"<<std::endl;
 }
+
 
 Status RedisLists::LIndex(const Slice& key, int64_t index, std::string* element) {
   shannon::ReadOptions read_options;
@@ -1399,7 +1398,6 @@ Status RedisLists::RealDelTimeout(BlackWidow * bw,std::string * key) {
       if (parsed_lists_meta_value.IsStale()) {
         AddDelKey(bw, *key);
         s = vdb_->Delete(shannon::WriteOptions(), handles_[0], *key);
-        meta_infos_list_.erase(*key);
       }
     }
     return s;

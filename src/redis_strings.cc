@@ -23,6 +23,14 @@ RedisStrings::RedisStrings(BlackWidow* const bw, const DataType& type)
     : Redis(bw, type) {
 }
 
+RedisStrings::~RedisStrings() {
+  for (auto handle : handles_) {
+    delete handle;
+  }
+  delete db_;
+  db_ = NULL;
+}
+
 Status RedisStrings::Open(const BlackwidowOptions& bw_options,
     const std::string& db_path) {
   bw_options_ = bw_options;
