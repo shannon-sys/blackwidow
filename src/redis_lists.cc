@@ -184,20 +184,6 @@ Status RedisLists::ScanKeys(const std::string& pattern,
   return Status::OK();
 }
 
-void show_meta_info() {
-    uint64_t total_size = 0;
-    uint32_t count = 0;
-    for (std::unordered_map<std::string, std::string*>::iterator iter = meta_infos_list_.begin();
-        iter != meta_infos_list_.end();
-        ++ iter) {
-        total_size += iter->first.size();
-        total_size += iter->second->size();
-        ++ count;
-    }
-    std::cout<<"count:"<<count<<"total size:"<<total_size<<"B "<<(total_size/1024)<<"k "<<(total_size/1024/1024)<<"M"<<std::endl;
-}
-
-
 Status RedisLists::LIndex(const Slice& key, int64_t index, std::string* element) {
   shannon::ReadOptions read_options;
   const shannon::Snapshot* snapshot;
