@@ -133,6 +133,7 @@ Status BlackWidow::Open(BlackwidowOptions& bw_options,
     exit(-1);
   }
   if (s.ok()) {
+    delete delkeys_db_;
     shannon::DBOptions db_ops(bw_options.options);
     ops.create_if_missing = false;
     ops.forced_index = false;
